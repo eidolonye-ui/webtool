@@ -1,0 +1,20 @@
+# WebTool SaaS Local Environment
+VITE_AI_ENDPOINT=http://localhost:11434
+VITE_AI_MODEL=llama3.2
+VITE_RBA_API_BASE=https://api.rba.gov.au
+VITE_ABS_API_BASE=https://api.data.abs.gov.au
+VITE_OPENTOPODATA_ENDPOINT=https://api.opentopodata.org/v1/srtm30m
+VITE_OVERPASS_ENDPOINT=https://overpass-api.de/api/interpreter
+VITE_GOOGLE_TASKS_API=https://tasks.googleapis.com/tasks/v1
+# 忽略前端依赖包 (最容易导致文件过多的元凶)
+node_modules/
+
+# 忽略 Python 虚拟环境
+venv/
+__pycache__/
+
+# 忽略环境变量配置 (保护你的 API Key 等隐私)
+.env
+
+# 忽略 Mac 系统自动生成的文件
+.DS_Store

@@ -1,0 +1,92 @@
+1. 首先关注首页的功能和UI布局。最上面的栏目条，显示条，目录条以及下面的报错Alert等等，有具体的优化建议吗？能否列出Site Investigation页面下所有的要素和板块分区以及各个内容连接中的关系？
+2. 需要系统能自动获取最精准和真实的数据来呈现当前的系统逻辑的完整工作，我的理解是需要把Site Investigation页面下所有板块彻底先跑通，才能继续结合其它的页面和板块进行深化。能否在你对系统的底层逻辑完全吃透后，制定一项以从Site Investigation页面开始的完整计划，在接下来的系统测试中我们一步步清除bug的同时确定能把各项功能落地可用。确保Site Investigation页面里每一项UI及功能都达到完整程度我们再向其它的关联页面迈进。目标还是一样，系统简单好用，数据精准，真正能帮助到每一位。Location Score下的内容能否列得更详细一些，还有能加入校车的详细信息吗？还发现个小问题，在点Clear之后，Location Score底下的内容没有被清空。去除系统里所有Ollama相关，采用其它可落地方法。
+3. 如果我的理解正确，那你是不是应该在完全理解系统结构的基础上来优化和完善，确保我们在Site Investigation页面下所有的体系都能运转起来，尤其是站在用户使用的角度，一定确保系统好用，数据是准确的才有意义。
+
+
+
+
+
+
+
+
+在深度系统检测后列出目前Site Investigation页面板块下的问题和可优化的建议。
+
+很可惜输入地址后系统回复的"Land Area, Frontage, Depth的信息都不准确，我知道在https://www.property.com.au/里能拿到所有地块基本的准确信息。我发现页面上部分字体太小，根本看不清，能否酌情调大？然后输入地址后有Location Score数据出现后页面下方的数据都看不到了，scroll bar也无法下拖。
+
+
+
+
+
+用户输入地址
+    │
+    ▼
+Nominatim API (OSM)
+    │  fetchSuggestions() — 300ms 防抖
+    ▼
+autocomplete 下拉 → 用户点选
+    │
+    ├──► sanitizeAddress()
+    │         │
+    │         ▼
+    │    store.dispatch: site.address / site.lat / site.lon
+    │
+    └──► runSiteInvestigation(lat, lon)         [terrain_engine.js]
+              │
+              ├── Overpass API (OSM) → amenity scores
+              ├── Elevation API       → slope, elevationDelta
+              └── Turf.js             → polygon, area 计算
+                   │
+                   ▼
+              store.dispatch: site.area / site.frontage / site.depth
+              setEstimatedFields({ area:true, frontage:true, depth:true })
+              store.dispatch: site.investigation.terrainData
+                   │
+                   ▼
+              synthesizeSiteAnalysis(terrainData, site, {})    ← BUG: 第三参数应传 planning
+                   │
+                   ├── yieldWaterfall[]    → 面积瀑布图
+                   ├── effectiveArea       → 实际可建面积
+                   ├── implicitCosts[]     → 隐性成本警告
+                   └── summary             → 文字结论
+
+
+
+
+
+用户上传文件
+    │
+    ▼
+handleDocUpload(file, type)
+    │
+    ├── extractFileText(file)          [pdf_ocr.js]
+    │       → 纯文本提取
+    │
+    └── (仅 s32) parseDocumentWithAI(text) [ai_adapter.js]
+              → Ollama llama3.2 @ localhost:11434
+              → 返回结构化字段 + S.173 fact tags
+                   │
+                   ▼
+              docReview 本地状态更新
+                   │
+                   ▼
+              用户点击 "Apply Intelligence"
+                   │
+                   ▼
+              extractAllFields(vp, s32, fsp)   [unified_engine.js]
+                   │
+                   ├── store.dispatch() × N   → 每个提取字段写入 store
+                   ├── store.dispatch: site.investigation.synthesis
+                   └── setEstimatedFields({ all: false })   → 清除估算标记
+
+
+
+
+
+
+
+
+
+
+
+
+
