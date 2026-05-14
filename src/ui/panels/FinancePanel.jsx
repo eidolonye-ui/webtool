@@ -213,6 +213,7 @@ export const FinancePanel = () => {
               value={finance.landPrice || ''}
               onChange={handleLandPriceChange}
               placeholder="e.g. 1,200,000"
+              debounceMs={250}
             />
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: T.sp.md }}>
@@ -222,6 +223,7 @@ export const FinancePanel = () => {
                   value={finance.stampDuty || ''}
                   onChange={(v) => { setFin('stampDuty', parseFloat(v) || 0); store.dispatch('financeLocks.stampDuty', true); }}
                   placeholder="Auto-calculated"
+                  debounceMs={250}
                 />
                 <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>
                   {finance.stampDuty > 0 && !locks.stampDuty ? 'Auto (SRO 2024-25 rates)' : locks.stampDuty ? 'Manually overridden' : 'Enter land price to auto-fill'}
@@ -244,6 +246,7 @@ export const FinancePanel = () => {
               label="Legal &amp; Due Diligence ($)"
               value={finance.legalFees || ''}
               onChange={(v) => setFin('legalFees', parseFloat(v) || 0)}
+              debounceMs={250}
             />
 
             {/* Site-works sync */}
@@ -256,6 +259,7 @@ export const FinancePanel = () => {
                 label="Site Works ($)"
                 value={finance.siteWorks || ''}
                 onChange={(v) => setFin('siteWorks', parseFloat(v) || 0)}
+                debounceMs={250}
               />
               {terrainData && (
                 <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
@@ -271,6 +275,7 @@ export const FinancePanel = () => {
                   label="Contingency (%)"
                   value={finance.contingencyPct || '5'}
                   onChange={(v) => setFin('contingencyPct', parseFloat(v) || 5)}
+                  debounceMs={250}
                 />
                 <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>5-10% recommended</div>
               </div>
@@ -278,6 +283,7 @@ export const FinancePanel = () => {
                 label="Project Duration (months)"
                 value={projectMonths}
                 onChange={(v) => setFin('projectMonths', parseInt(v) || 24)}
+                debounceMs={250}
               />
             </div>
 
@@ -288,6 +294,7 @@ export const FinancePanel = () => {
                 value={finance.targetMargin ?? 20}
                 onChange={(v) => setFin('targetMargin', parseFloat(v) || 20)}
                 placeholder="20"
+                debounceMs={250}
               />
               <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>
                 Hurdle rate for PROCEED/RENEGOTIATE decision in Executive Memo
@@ -355,6 +362,7 @@ export const FinancePanel = () => {
                 value={finance.buildArea || ''}
                 onChange={(v) => { setFin('buildArea', parseFloat(v) || 0); store.dispatch('financeLocks.buildArea', true); }}
                 placeholder={site.area > 0 ? 'Click Auto-estimate or enter manually' : 'Enter build area (m²)'}
+                debounceMs={250}
               />
               {site.area > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 4 }}>
@@ -377,6 +385,7 @@ export const FinancePanel = () => {
                 label="Build Cost per m² ($)"
                 value={finance.buildCostPSM || ''}
                 onChange={(v) => { setFin('buildCostPSM', parseFloat(v) || 0); store.dispatch('financeLocks.buildCostPSM', true); }}
+                debounceMs={250}
               />
               {finance.buildType && finance.buildCostPSM > 0 && (() => {
                 const { getSuggestedPSM: gp } = { getSuggestedPSM };
@@ -399,11 +408,13 @@ export const FinancePanel = () => {
                 label="LVR (%)"
                 value={financing.lvrPct || '65'}
                 onChange={(v) => setFing('lvrPct', parseFloat(v) || 65)}
+                debounceMs={250}
               />
               <UIInput
                 label="Interest Rate (%)"
                 value={financing.interestRate || '6.5'}
                 onChange={(v) => setFing('interestRate', parseFloat(v) || 6.5)}
+                debounceMs={250}
               />
             </div>
 

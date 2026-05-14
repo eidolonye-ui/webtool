@@ -16,6 +16,7 @@ import {
 import { UIPanel, UIButton } from '../components/Common_V2';
 import { C, SANS, T } from '../../core/config/theme_v3.js';
 import { ConfidenceEngine } from '../../domain/spatial/confidence_engine.js';
+import { resetLiveSnapshotBaseline } from '../../domain/finance/live_calc_engine.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Formatters
@@ -76,6 +77,7 @@ const seedStrategy = (strategyKey) => {
   ];
   store.batchDispatch(updates);
   store.setActiveScenario(prevId);
+  resetLiveSnapshotBaseline(prevId); // reset delta baseline for restored scenario
   return newId;
 };
 
@@ -205,7 +207,7 @@ const MatrixView = ({ state }) => {
                   border: '1px solid ' + (id === activeId ? 'rgba(56,189,248,0.4)' : C.surface.border),
                   borderRadius: T.r.md, textAlign: 'center', cursor: 'pointer',
                 }}
-                onClick={() => store.setActiveScenario(id)}
+                onClick={() => { store.setActiveScenario(id); resetLiveSnapshotBaseline(id); }}
               >
                 <div style={{ fontSize: 14 }}>{icon}</div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: C.text.primary, marginTop: 2 }}>
@@ -240,7 +242,7 @@ const MatrixView = ({ state }) => {
                 <ScenarioColumnHeader
                   key={id} id={id} scenario={scenarios[id]}
                   isActive={id === activeId}
-                  onActivate={() => store.setActiveScenario(id)}
+                  onActivate={() => { store.setActiveScenario(id); resetLiveSnapshotBaseline(id); }}
                 />
               ))}
             </tr>
@@ -433,11 +435,11 @@ export const ComparisonPanel = () => {
       {/* View switcher */}
       <div style={{ display: 'flex', gap: 4, marginBottom: T.sp.lg, borderBottom: '1px solid ' + C.surface.border }}>
         <button style={tabStyle('matrix')} onClick={() => setActiveView('matrix')}>📊 Strategy Matrix</button>
-        <button style={tabStyle('delta')}  onClick={() => setActiveView('delta')}>⚖️ Delta View</button>
+        <button style={tabStyle('delta')}  onClick={() => setActiveView('delta')}>⚖️ Delta Analysis</button>
       </div>
 
-      {activeView === 'matrix' && <MatrixView  state={state} />}
-      {activeView === 'delta'  && <DeltaView   state={state} />}
+      {activeView === 'matrix' && <MatrixView state={state} />}
+      {activeView === 'delta'  && <DeltaView  state={state} />}
     </UIPanel>
   );
 };

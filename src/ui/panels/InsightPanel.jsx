@@ -1,7 +1,7 @@
 /**
  * @file ui/panels/InsightPanel.jsx
  * @description Strategic insight panel — rule-based financial analysis + sensitivity matrix.
- * @version 3.0.0 - Added live sensitivity matrix (calculateSensitivity integration).
+ * @version 3.1.0 - useLiveSnapshot hook: removed liveSnapshot prop dependency on AppShell.
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -10,6 +10,7 @@ import { C, T } from '../../core/config/theme_v3.js';
 import { store } from '../../core/store/store.js';
 import { generateProjectInsights } from '../../domain/finance/insight_engine.js';
 import { calculateSensitivity } from '../../domain/finance/sensitivity_engine.js';
+import { useLiveSnapshot } from '../hooks/useLiveSnapshot.js';
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
@@ -205,11 +206,14 @@ const IRRCard = ({ irr, margin, capInterest }) => {
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export const InsightPanel = ({ liveSnapshot }) => {
+export const InsightPanel = () => {
   const [scenario, setScenario] = useState(() => store.getActiveScenario());
   const [insights, setInsights] = useState(null);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(null);
+
+  // Owns its own snapshot subscription — no prop from AppShell required.
+  const liveSnapshot = useLiveSnapshot();
 
   useEffect(() => {
     const unsub = store.subscribe(() => setScenario(store.getActiveScenario()));

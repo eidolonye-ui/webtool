@@ -2,15 +2,14 @@
  * @file ui/layout/AppShell.jsx
  * @description Main application shell for WebTool SaaS.
  * Implements the Sovereign Task Switcher and Logical Conflict HUD.
- * @version 3.1.0 - Bug fixes: nav top offset, onTabChange prop, header height constant.
+ * @version 3.2.0 - liveSnapshot fully removed from AppShell; each consumer owns its own hook.
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { C, SANS, T } from '../../core/config/theme_v3.js';
 import { store } from '../../core/store/store.js';
 import { SovereignHeader } from '../components/SovereignHeader.jsx';
 import { SiteContextSidebar } from '../components/SiteContextSidebar.jsx';
-import { getLiveSnapshot } from '../../domain/finance/live_calc_engine.js';
 
 // Panel Imports
 import { SiteInvestigationPanel } from '../panels/SiteInvestigationPanel.jsx';
@@ -39,25 +38,19 @@ const TABS = [
 const HEADER_H = 60;
 
 /**
- * Debounce helper - defers fn by `delay` ms, cancels prior pending call.
- */
-const useDebouncedCallback = (fn, delay) => {
-  const timerRef = useRef(null);
-  return (...args) => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => fn(...args), delay);
-  };
-};
-
-/**
  * React Error Boundary — wraps each panel individually.
  * Catches runtime errors so a single broken panel doesn't white-screen the app.
  * key={activeTab} in the call site ensures the boundary resets on tab switch.
+ *
+ * Multi-level recovery:
+ *   1st crash  → "Force Retry" button (tries once more in case it was transient)
+ *   2nd crash  → only "Go to Site Investigation" is shown; retry is hidden to
+ *               prevent an infinite crash loop caused by bad store state.
  */
 class PanelErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, message: '' };
+    this.state = { hasError: false, message: '', retryCount: 0 };
   }
   static getDerivedStateFromError(err) {
     return { hasError: true, message: err?.message || 'Unknown error' };
@@ -65,8 +58,16 @@ class PanelErrorBoundary extends React.Component {
   componentDidCatch(err, info) {
     console.error('[PanelErrorBoundary]', err, info);
   }
+  handleRetry() {
+    this.setState(prev => ({
+      hasError: false,
+      message: '',
+      retryCount: prev.retryCount + 1,
+    }));
+  }
   render() {
     if (this.state.hasError) {
+      const canRetry = this.state.retryCount < 1;
       return (
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -78,18 +79,36 @@ class PanelErrorBoundary extends React.Component {
             Panel crashed — {this.state.message}
           </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', maxWidth: 420 }}>
-            Your data is safe. Switch to another tab or click the button below to retry.
+            {canRetry
+              ? 'Your data is safe. You can retry once, or switch to a different tab.'
+              : 'This panel keeps crashing — likely caused by unexpected data in this scenario. Switch to Site Investigation to continue safely.'}
           </div>
-          <button
-            onClick={() => this.setState({ hasError: false, message: '' })}
-            style={{
-              background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.5)',
-              borderRadius: 8, color: '#a5b4fc', fontWeight: 700, fontSize: 13,
-              padding: '8px 20px', cursor: 'pointer'
-            }}
-          >
-            ↺ Retry Panel
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {/* Primary: always offer escape to a known-safe panel */}
+            <button
+              onClick={() => this.props.onSafeTabRequest?.('siteinv')}
+              style={{
+                background: 'rgba(0,122,255,0.2)', border: '1px solid rgba(0,122,255,0.5)',
+                borderRadius: 8, color: '#60aaff', fontWeight: 700, fontSize: 13,
+                padding: '8px 20px', cursor: 'pointer'
+              }}
+            >
+              ← Go to Site Investigation
+            </button>
+            {/* Secondary: only shown on first crash */}
+            {canRetry && (
+              <button
+                onClick={() => this.handleRetry()}
+                style={{
+                  background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)',
+                  borderRadius: 8, color: '#a5b4fc', fontWeight: 700, fontSize: 13,
+                  padding: '8px 20px', cursor: 'pointer'
+                }}
+              >
+                ↺ Force Retry
+              </button>
+            )}
+          </div>
         </div>
       );
     }
@@ -98,51 +117,57 @@ class PanelErrorBoundary extends React.Component {
 }
 
 export const AppShell = () => {
-  const [activeTab,    setActiveTab]    = useState('siteinv');
-  const [appState,     setAppState]     = useState(store.getState());
-  const [liveSnapshot, setLiveSnapshot] = useState(null);
+  const [activeTab, setActiveTab] = useState('siteinv');
 
-  // Debounce the live calc so it only fires 300ms after the last state change,
-  // preventing a full recalculation cascade on every keystroke.
-  // getLiveSnapshot() reads from store.getState() internally — no argument needed.
-  const debouncedCalc = useDebouncedCallback(() => {
-    try {
-      setLiveSnapshot(getLiveSnapshot());
-    } catch (e) {
-      console.error('[LiveCalc] Simulation error', e);
-    }
-  }, 300);
+  // AppShell only tracks the two fields it directly renders:
+  //   accentColor  — nav tab highlight colour
+  //   conflicts    — Logical Conflict HUD
+  // Everything else is owned by each panel's own store.subscribe().
+  // liveSnapshot is no longer held here — each consumer (InsightPanel, SovereignMemoPanel)
+  // calls useLiveSnapshot() internally so AppShell never re-renders on finance changes.
+  const [shellSlice, setShellSlice] = useState(() => {
+    const sys = store.getState().system;
+    return {
+      accentColor: sys?.activeAccentColor   || '#0f4c75',
+      conflicts:   sys?.consistencyConflicts || [],
+    };
+  });
 
   useEffect(() => {
     const unsubscribe = store.subscribe((newState) => {
-      setAppState(newState);
-      debouncedCalc();
+      const sys = newState.system;
+      // Only re-render AppShell when its own visual fields change.
+      // liveSnapshot is no longer held here — bail out early on unrelated changes.
+      setShellSlice(prev => {
+        const nextAccent    = sys?.activeAccentColor    || '#0f4c75';
+        const nextConflicts = sys?.consistencyConflicts || [];
+        if (
+          prev.accentColor === nextAccent &&
+          prev.conflicts   === nextConflicts
+        ) return prev; // referential equality — no re-render
+        return { accentColor: nextAccent, conflicts: nextConflicts };
+      });
     });
     return () => unsubscribe();
   }, []);
 
-  const state       = appState;
-  const accentColor = state.system?.activeAccentColor || '#0f4c75';
+  const { accentColor, conflicts } = shellSlice;
 
-  // Memoize conflict list - avoids re-rendering the HUD on every unrelated state change
-  const conflicts = useMemo(
-    () => state.system?.consistencyConflicts || [],
-    [state.system?.consistencyConflicts]
-  );
-
+  // Each panel manages its own store.subscribe() and (where needed) useLiveSnapshot().
+  // AppShell passes NO state, scenario, or liveSnapshot props — eliminating all
+  // props-cascade double-renders from AppShell re-renders.
   const renderPanel = () => {
-    const scenario = store.getActiveScenario() || {};
     switch (activeTab) {
-      case 'siteinv':    return <SiteInvestigationPanel  state={state} scenario={scenario} />;
-      case 'physical':   return <PhysicalConditionPanel  state={state} scenario={scenario} />;
-      case 'planning':   return <PlanningPanel           state={state} scenario={scenario} />;
-      case 'market':     return <MarketPanel_V2          state={state} scenario={scenario} />;
-      case 'finance':    return <FinancePanel            state={state} scenario={scenario} />;
-      case 'insights':   return <InsightPanel            state={state} scenario={scenario} liveSnapshot={liveSnapshot} />;
-      case 'comparison': return <ComparisonPanel         state={state} />;
-      case 'report':     return <ReportPanel_Fixed       state={state} scenario={scenario} liveSnapshot={liveSnapshot} />;
-      case 'memo':       return <SovereignMemoPanel      state={state} scenario={scenario} />;
-      default:           return <SiteInvestigationPanel  state={state} scenario={scenario} />;
+      case 'siteinv':    return <SiteInvestigationPanel />;
+      case 'physical':   return <PhysicalConditionPanel />;
+      case 'planning':   return <PlanningPanel />;
+      case 'market':     return <MarketPanel_V2 />;
+      case 'finance':    return <FinancePanel />;
+      case 'insights':   return <InsightPanel />;
+      case 'comparison': return <ComparisonPanel />;
+      case 'report':     return <ReportPanel_Fixed />;
+      case 'memo':       return <SovereignMemoPanel />;
+      default:           return <SiteInvestigationPanel />;
     }
   };
 
@@ -156,8 +181,8 @@ export const AppShell = () => {
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* FIX #18: pass onTabChange so header health button can actually switch tabs */}
-      <SovereignHeader state={state} onTabChange={setActiveTab} />
+      {/* SovereignHeader has its own store.subscribe — state prop is redundant */}
+      <SovereignHeader onTabChange={setActiveTab} />
 
       {/* SOVEREIGN TASK SWITCHER */}
       {/* FIX #17: top was 0 -- nav slid under the sticky header. Now anchored below it. */}
@@ -256,7 +281,8 @@ export const AppShell = () => {
           overflow: 'hidden',            // both X and Y — prevents any scrollbar
           backgroundColor: C.surface.panel
         }}>
-          <SiteContextSidebar state={state} liveSnapshot={liveSnapshot} />
+          {/* SiteContextSidebar has its own store.subscribe and useLiveSnapshot — no props needed */}
+          <SiteContextSidebar />
         </aside>
 
         {/* CONTENT AREA */}
@@ -267,7 +293,7 @@ export const AppShell = () => {
           flexDirection: 'column',
           gap: T.sp.md
         }}>
-          <PanelErrorBoundary key={activeTab}>{renderPanel()}</PanelErrorBoundary>
+          <PanelErrorBoundary key={activeTab} onSafeTabRequest={setActiveTab}>{renderPanel()}</PanelErrorBoundary>
         </section>
       </main>
     </div>

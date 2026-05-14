@@ -2,7 +2,7 @@
  * @file domain/finance/live_calc_engine.js
  * @description Real-time financial snapshot for AppShell live preview.
  * Reads from correct store path: state.scenarios[activeId].finance
- * @version 1.4.0 - IRR integration via irr_engine; fixed duplicate-content corruption.
+ * @version 1.5.0 - _prevSnapshots keyed by scenarioId; no cross-scenario delta bleed.
  */
 
 import { store } from '../../core/store/store.js';
@@ -10,8 +10,12 @@ import { calcVicStampDuty } from './tax_engine.js';
 import { safeNum, safeRound, guardObj } from '../../core/utils/num_guard.js';
 import { buildIRRCashFlows, calcTrueIRR } from './irr_engine.js';
 
-// Module-level variable for delta tracking — survives HMR unlike function properties.
-let _prevSnapshot = { margin: 0, profit: 0, grv: 0 };
+// Per-scenario delta map — keyed by scenarioId.
+// Using a Map prevents cross-scenario delta bleed when the user rapidly switches
+// between scenarios (previously a single shared object caused the delta shown for
+// scenario B to be "B minus A's last values").
+// Module-level placement survives HMR (see Task #60).
+const _prevSnapshots = new Map();
 
 /**
  * Compute a quick live snapshot of key financial metrics.
@@ -131,13 +135,15 @@ export function getLiveSnapshot() {
     capInterest: safeCapInterest,
   });
 
-  // 10. Delta vs. previous snapshot (module-level var — not lost on HMR)
+  // 10. Delta vs. previous snapshot for this specific scenario.
+  // Using a per-scenario entry prevents delta bleed when switching between scenarios.
+  const prev  = _prevSnapshots.get(activeId) || { margin: 0, profit: 0, grv: 0 };
   const delta = {
-    margin: safeNum(Math.round((safeMargin - (_prevSnapshot.margin || 0)) * 10) / 10),
-    profit: safeNum(safeProfit - (_prevSnapshot.profit || 0)),
-    grv:    safeNum(safeGrv    - (_prevSnapshot.grv    || 0)),
+    margin: safeNum(Math.round((safeMargin - prev.margin) * 10) / 10),
+    profit: safeNum(safeProfit - prev.profit),
+    grv:    safeNum(safeGrv    - prev.grv),
   };
-  _prevSnapshot = { margin: safeMargin, profit: safeProfit, grv: safeGrv };
+  _prevSnapshots.set(activeId, { margin: safeMargin, profit: safeProfit, grv: safeGrv });
 
   return {
     footprint:   safeFootprint,
@@ -157,7 +163,15 @@ export function getLiveSnapshot() {
 /** @deprecated Use getLiveSnapshot */
 export const computeLiveSnapshot = getLiveSnapshot;
 
-/** Reset the delta baseline (call after scenario switch) */
-export const resetLiveSnapshotBaseline = () => {
-  _prevSnapshot = { margin: 0, profit: 0, grv: 0 };
+/**
+ * Reset the delta baseline after a scenario switch.
+ * @param {string} [scenarioId] - Reset a specific scenario's baseline.
+ *   If omitted, clears ALL scenario baselines (e.g. on full app reset).
+ */
+export const resetLiveSnapshotBaseline = (scenarioId) => {
+  if (scenarioId) {
+    _prevSnapshots.delete(scenarioId);
+  } else {
+    _prevSnapshots.clear();
+  }
 };

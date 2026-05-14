@@ -1,16 +1,62 @@
 /**
  * @file ui/components/Common_V2.jsx
  * @description Sovereign High-Fidelity UI System.
- * @version 2.0.1 - STABLE FIX
+ * @version 2.1.0 - UIInput debounceMs prop: buffers store dispatches for numeric inputs.
  */
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { C, SANS, MONO, T } from '../../core/config/theme_v3.js';
 
-export const UIInput = ({ 
-  label, value, onChange, onClear, placeholder = '', type = 'text', style = {}, 
-  verificationSource = null, isAutoFilled = false, clearable = false 
+/**
+ * UIInput — controlled text/number input with optional debounced dispatch.
+ *
+ * @prop {number} [debounceMs=0] - When > 0, delays calling `onChange` by this many ms
+ *   after the last keystroke. The displayed value updates immediately (no lag for the user).
+ *   Pass 0 (default) for text fields where instant dispatch is preferable.
+ *   Recommended: 250 for numeric financial inputs in FinancePanel.
+ */
+export const UIInput = ({
+  label, value, onChange, onClear, placeholder = '', type = 'text', style = {},
+  verificationSource = null, isAutoFilled = false, clearable = false, debounceMs = 0
 }) => {
+  // Local display state — always tracks the visible input immediately.
+  // Decoupled from store dispatch when debounceMs > 0.
+  const [localValue, setLocalValue] = useState(value ?? '');
+  const timerRef   = useRef(null);
+  const isTypingRef = useRef(false); // suppress external-sync loop during active typing
+
+  // Sync from external value when the parent updates it (scenario switch, clear, auto-fill).
+  // Skip the sync if this component itself triggered the change (debounced path).
+  useEffect(() => {
+    if (!isTypingRef.current) {
+      setLocalValue(value ?? '');
+    }
+  }, [value]);
+
+  const handleChange = (raw) => {
+    setLocalValue(raw);
+    if (debounceMs > 0) {
+      isTypingRef.current = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        isTypingRef.current = false;
+        onChange(raw);
+      }, debounceMs);
+    } else {
+      onChange(raw);
+    }
+  };
+
+  // Flush immediately on blur so leaving a field always commits the value.
+  const handleBlur = () => {
+    if (debounceMs > 0 && timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+      isTypingRef.current = false;
+      onChange(localValue);
+    }
+  };
+
   return (
     <div style={{ marginBottom: T.sp.sm, fontFamily: SANS }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -31,8 +77,9 @@ export const UIInput = ({
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         <input
           type={type}
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
+          value={localValue}
+          onChange={(e) => handleChange(e.target.value)}
+          onBlur={handleBlur}
           placeholder={placeholder}
           style={{
             width: '100%',
@@ -48,9 +95,9 @@ export const UIInput = ({
             ...style
           }}
         />
-        {clearable && value && (
-          <span 
-            onClick={() => onClear ? onClear() : onChange('')}
+        {clearable && localValue && (
+          <span
+            onClick={() => { onClear ? onClear() : onChange(''); setLocalValue(''); }}
             style={{ position: 'absolute', right: 8, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', transition: 'all 0.2s' }}
           >✕</span>
         )}

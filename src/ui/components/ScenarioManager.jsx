@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { T } from '../../core/config/theme_v3.js';
 import { store } from '../../core/store/store.js';
+import { resetLiveSnapshotBaseline } from '../../domain/finance/live_calc_engine.js';
 
 /**
  * @param {Object}   scenarios  - All scenario objects from store state
@@ -118,6 +119,7 @@ export const ScenarioManager = ({ scenarios, activeId, onClose }) => {
             onClick={() => {
               if (!editingScenario) {
                 store.setActiveScenario(id);
+                resetLiveSnapshotBaseline(id); // reset delta baseline for this scenario
                 onClose();
               }
             }}
