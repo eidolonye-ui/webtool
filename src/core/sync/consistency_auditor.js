@@ -6,6 +6,7 @@
  */
 
 import { store } from '../store/store.js';
+import { getZoneDefaults } from '../../domain/spatial/constraint_engine.js';
 
 export const SovereignConsistencyAuditor = {
   _timer: null,
@@ -29,8 +30,10 @@ export const SovereignConsistencyAuditor = {
     // --- 1. Physical capacity vs. declared build area ---
     const terrainData = site?.investigation?.terrainData;
     const siteArea    = Number(site?.area) || 0;
-    // Estimate buildable footprint: site area * 60% coverage * floor estimate
-    const coverage    = 0.60;
+    // Estimate buildable footprint using zone-aware coverage + floor estimate
+    const zoneCode    = (planning?.zoneCode || planning?.zone || '').toUpperCase();
+    const zd          = getZoneDefaults(zoneCode);
+    const coverage    = zd.cov;   // e.g. NRZ=0.40, GRZ=0.60, RGZ=0.65
     const estFloors   = planning?.maxHeight >= 9 ? 2 : 1;
     const capacity    = Math.round(siteArea * coverage * estFloors * 0.85);
     const userBuild   = Number(finance?.buildArea) || 0;
@@ -47,8 +50,8 @@ export const SovereignConsistencyAuditor = {
 
     // --- 2. Zoning vs. unit count ---
     const grvUnits = Number(market?.grvUnits) || 0;
-    const zone     = planning?.zone || 'NRZ';
-    if (zone === 'NRZ' && grvUnits > 2) {
+    const zone     = (planning?.zoneCode || planning?.zone || '').toUpperCase();
+    if (zone.startsWith('NRZ') && grvUnits > 2) {
       conflicts.push({
         id:         'ZONING_PARADOX',
         severity:   'danger',

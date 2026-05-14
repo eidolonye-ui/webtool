@@ -1,11 +1,13 @@
 /**
  * RiskEngine (Domain Layer)
- * 
+ *
  * Encapsulates the complex business logic for identifying property-specific
  * risks (Planning, Environmental, Geotechnical, and Financial).
- * 
+ *
  * Designed to be stateless: Inputs the current system state, returns an array of Risk objects.
  */
+
+import { getZoneDefaults } from './constraint_engine.js';
 
 export const RiskEngine = {
   /**
@@ -24,7 +26,9 @@ export const RiskEngine = {
     {
       const sa = parseFloat(site.area) || 0;
       const ba = parseFloat(plan.buildableArea) || 0;
-      const covLimit = parseFloat(plan.maxCoverage) || (ZSB_RESCODE[plan.zone]?.cov * 100) || 60;
+      // Use zone-aware defaults from constraint_engine (no more ZSB_RESCODE ReferenceError)
+      const zd = getZoneDefaults(plan.zoneCode);
+      const covLimit = parseFloat(plan.maxCoverage) || (zd.cov * 100);
       const actualCov = sa > 0 ? ((ba / sa) * 100) : 0;
       const covFail = actualCov > covLimit;
 
@@ -34,7 +38,7 @@ export const RiskEngine = {
       const provPark = parseFloat(plan.providedCarSpaces) || 0;
       const parkFail = provPark < reqPark;
 
-      const gdnLimit = (ZSB_RESCODE[plan.zone]?.gdn || 0.35) * sa;
+      const gdnLimit = zd.gdn * sa;
       const gdnAvail = sa - ba;
       const gdnFail = gdnAvail < gdnLimit;
 
@@ -47,16 +51,17 @@ export const RiskEngine = {
     }
 
     // --- 2. ENVIRONMENTAL & OVERLAY RISKS ---
-    if (plan.hasVPO) f.push({ label: "Vegetation Protection Overlay (VPO)", tip: "Tree report required, removal needs permit - impacts buildable area" });
-    if (plan.hasSLO) f.push({ label: "Significant Landscape Overlay (SLO)", tip: "Design must protect landscape views, building bulk strictly limited" });
-    if (plan.hasESO) f.push({ label: "Environmental Significance Overlay (ESO)", tip: "Environmental assessment required, may restrict construction scope" });
-    if (plan.hasSBO) f.push({ label: "Flood Risk Overlay (SBO/LSIO)", tip: "Hydrology report required, floor levels may need to be raised, insurance costs increase" });
-    if (plan.hasBMO) f.push({ label: "Bushfire Management Overlay (BMO)", tip: "BAL rating required, building materials restricted, construction cost +10-15%" });
-    if (plan.hasGeo) f.push({ label: "Geotechnical Risk", tip: "Geotechnical investigation required, footing costs may increase substantially" });
-    if (plan.hasHO) f.push({ label: "Heritage Overlay", tip: "Demolition may be refused, alterations subject to strict controls" });
-    if (plan.hasAboriginal) f.push({ label: "Aboriginal Cultural Heritage", tip: "CHMP assessment required, may delay project 6-12 months" });
+    if (plan.hasVPO)  f.push({ label: "Vegetation Protection Overlay (VPO)", tip: "Tree report required, removal needs permit - impacts buildable area" });
+    if (plan.hasSLO)  f.push({ label: "Significant Landscape Overlay (SLO)", tip: "Design must protect landscape views, building bulk strictly limited" });
+    if (plan.hasESO)  f.push({ label: "Environmental Significance Overlay (ESO)", tip: "Environmental assessment required, may restrict construction scope" });
+    if (plan.hasSBO)  f.push({ label: "Flood Risk Overlay (SBO/LSIO)", tip: "Hydrology report required, floor levels may need to be raised, insurance costs increase" });
+    if (plan.hasBMO)  f.push({ label: "Bushfire Management Overlay (BMO)", tip: "BAL rating required, building materials restricted, construction cost +10-15%" });
+    if (plan.hasEMO)  f.push({ label: "Geotechnical/Erosion Overlay (EMO)", tip: "Geotechnical investigation required, footing costs may increase substantially" });
+    if (plan.hasHO)   f.push({ label: "Heritage Overlay", tip: "Demolition may be refused, alterations subject to strict controls" });
+    if (plan.hasACHO) f.push({ label: "Aboriginal Cultural Heritage Overlay (ACHO)", tip: "CHMP assessment required, may delay project 6-12 months" });
+    if (plan.hasDDO)  f.push({ label: "Design & Development Overlay (DDO)", tip: "Site-specific design response required. Urban design consultant recommended ($4k–$8k). May mandate materials, heights, or setbacks beyond zone defaults." });
     if (plan.covenants) f.push({ label: "Restrictive Covenant", tip: "Covenant directly restricts development - careful legal review required" });
-    if (plan.zone === "NRZ") f.push({ label: "NRZ - Density Restriction", tip: "Typically max 2 dwellings - high-density development not viable" });
+    if ((plan.zoneCode || '').toUpperCase().startsWith('NRZ')) f.push({ label: "NRZ - Density Restriction", tip: "Typically max 2 dwellings - high-density development not viable" });
     if (plan.hasSingleCovenant) f.push({ label: "🚫 SINGLE DWELLING COVENANT - Development Blocked", tip: "Legal covenant restricts property to one dwelling only. Any subdivision or multi-dwelling development is prohibited." });
     if (plan.hasEasementBoe) f.push({ label: "Easement Detected - Build Over Easement (BOE) Risk", tip: "Easement may pass through developable area. BOE application ($1,500-$5,000) and Report & Consent required. May reduce net buildable area." });
 

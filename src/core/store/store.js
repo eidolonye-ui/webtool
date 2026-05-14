@@ -31,6 +31,8 @@ class WebToolStore {
       },
       scenarios: {
         default: {
+          label:        '',        // human display name for this scenario
+          strategyType: '',        // 'dual_occ' | 'townhouse' | 'apartments' | 'custom'
           site: {
             address: '',
             lat: null,
@@ -60,7 +62,20 @@ class WebToolStore {
             hasSingleCovenant: false,
             hasS173:           false,
             s173Details:       '',
-            covenantDetails:   ''
+            covenantDetails:   '',
+            dealingNumbers:    [],          // Victorian title dealing numbers (D######, AL######, etc.)
+            // Overlay flags (referenced by risk_engine + constraint_engine)
+            hasDDO:            false,
+            hasSLO:            false,
+            hasESO:            false,
+            hasACHO:           false,
+            hasEMO:            false,
+            overlayLabels:     [],
+            // Site services availability
+            servicesElec:      false,
+            servicesGas:       false,
+            servicesWater:     false,
+            servicesSewer:     false
           },
           physical: {
             slope:                    null,
@@ -85,7 +100,8 @@ class WebToolStore {
             buildCostPSM: 0,
             legalFees: 0,
             contingencyPct: 5,
-            projectMonths: 24
+            projectMonths: 24,
+            targetMargin: 20
           },
           financeLocks: {
             buildArea: false,
@@ -328,24 +344,25 @@ class WebToolStore {
     this.notify();
   }
 
-  _setDeepValue(obj, path, value) {
-    const keys = path.split('.');
-    let current = obj;
-    for (let i = 0; i < keys.length - 1; i++) {
-      const key = keys[i];
-      if (!(key in current)) current[key] = {};
-      current = current[key];
-    }
-    current[keys[keys.length - 1]] = value;
-  }
-
   subscribe(listener) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
   notify() {
-    this.listeners.forEach(l => l(this.state));
+    this.listeners.forEach(fn => fn(this.state));
+  }
+
+  _setDeepValue(obj, path, value) {
+    const keys = path.split('.');
+    let current = obj;
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (current[keys[i]] === undefined || typeof current[keys[i]] !== 'object') {
+        current[keys[i]] = {};
+      }
+      current = current[keys[i]];
+    }
+    current[keys[keys.length - 1]] = value;
   }
 }
 

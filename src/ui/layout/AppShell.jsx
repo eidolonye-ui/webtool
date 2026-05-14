@@ -49,6 +49,54 @@ const useDebouncedCallback = (fn, delay) => {
   };
 };
 
+/**
+ * React Error Boundary — wraps each panel individually.
+ * Catches runtime errors so a single broken panel doesn't white-screen the app.
+ * key={activeTab} in the call site ensures the boundary resets on tab switch.
+ */
+class PanelErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+  static getDerivedStateFromError(err) {
+    return { hasError: true, message: err?.message || 'Unknown error' };
+  }
+  componentDidCatch(err, info) {
+    console.error('[PanelErrorBoundary]', err, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', height: '60vh', gap: 16,
+          color: 'rgba(255,255,255,0.7)', textAlign: 'center', padding: 32
+        }}>
+          <div style={{ fontSize: 40 }}>⚠️</div>
+          <div style={{ fontWeight: 700, fontSize: 16, color: '#f87171' }}>
+            Panel crashed — {this.state.message}
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', maxWidth: 420 }}>
+            Your data is safe. Switch to another tab or click the button below to retry.
+          </div>
+          <button
+            onClick={() => this.setState({ hasError: false, message: '' })}
+            style={{
+              background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.5)',
+              borderRadius: 8, color: '#a5b4fc', fontWeight: 700, fontSize: 13,
+              padding: '8px 20px', cursor: 'pointer'
+            }}
+          >
+            ↺ Retry Panel
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export const AppShell = () => {
   const [activeTab,    setActiveTab]    = useState('siteinv');
   const [appState,     setAppState]     = useState(store.getState());
@@ -56,9 +104,10 @@ export const AppShell = () => {
 
   // Debounce the live calc so it only fires 300ms after the last state change,
   // preventing a full recalculation cascade on every keystroke.
-  const debouncedCalc = useDebouncedCallback((newState) => {
+  // getLiveSnapshot() reads from store.getState() internally — no argument needed.
+  const debouncedCalc = useDebouncedCallback(() => {
     try {
-      setLiveSnapshot(getLiveSnapshot(newState));
+      setLiveSnapshot(getLiveSnapshot());
     } catch (e) {
       console.error('[LiveCalc] Simulation error', e);
     }
@@ -67,7 +116,7 @@ export const AppShell = () => {
   useEffect(() => {
     const unsubscribe = store.subscribe((newState) => {
       setAppState(newState);
-      debouncedCalc(newState);
+      debouncedCalc();
     });
     return () => unsubscribe();
   }, []);
@@ -201,10 +250,10 @@ export const AppShell = () => {
         minHeight: 0,
         overflow: 'hidden'
       }}>
-        {/* LEFT SIDEBAR - Site Context — no scrollbar, clips overflow */}
+        {/* LEFT SIDEBAR - Site Context — clips all overflow, no scrollbars */}
         <aside style={{
           borderRight: '1px solid ' + C.surface.border,
-          overflowY: 'hidden',
+          overflow: 'hidden',            // both X and Y — prevents any scrollbar
           backgroundColor: C.surface.panel
         }}>
           <SiteContextSidebar state={state} liveSnapshot={liveSnapshot} />
@@ -218,7 +267,7 @@ export const AppShell = () => {
           flexDirection: 'column',
           gap: T.sp.md
         }}>
-          {renderPanel()}
+          <PanelErrorBoundary key={activeTab}>{renderPanel()}</PanelErrorBoundary>
         </section>
       </main>
     </div>

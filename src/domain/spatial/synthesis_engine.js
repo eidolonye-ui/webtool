@@ -17,6 +17,7 @@
  */
 
 import { calculateSovereignYield } from './terrain_engine.js';
+import { safePositiveRound, safeNum } from '../../core/utils/num_guard.js';
 
 /**
  * Derive an average setback (in metres) from the planning setbacks object.
@@ -85,6 +86,33 @@ export const synthesizeSiteAnalysis = (terrainData, siteState = {}, constraints 
     terrainData.polygon,
     combinedConstraints
   );
+
+  // Guard effectiveArea before it can propagate as NaN
+  const safeEffectiveArea = safePositiveRound(effectiveArea);
+
+  // Align waterfall "Total Site Area" with the authoritative store value when available.
+  const storeArea = safeNum(siteState?.area);
+  if (storeArea > 0 && waterfall.length > 0) {
+    const geomArea = safeNum(waterfall[0].value);
+    if (Math.abs(storeArea - geomArea) > 1) {
+      waterfall[0].value = storeArea;
+      waterfall[0].label = 'Total Site Area (Surveyed)';
+      const scale = geomArea > 0 ? storeArea / geomArea : 1;
+      for (let i = 1; i < waterfall.length; i++) {
+        if (waterfall[i].deduction != null)
+          waterfall[i].deduction = safePositiveRound(waterfall[i].deduction * scale);
+        if (waterfall[i].remaining != null)
+          waterfall[i].remaining = safePositiveRound(waterfall[i].remaining * scale);
+      }
+    }
+  }
+
+  // Sanitise all waterfall numeric values (value / deduction / remaining)
+  waterfall.forEach(row => {
+    if (row.value    != null) row.value    = safePositiveRound(row.value);
+    if (row.deduction!= null) row.deduction= safePositiveRound(row.deduction);
+    if (row.remaining!= null) row.remaining= safePositiveRound(row.remaining);
+  });
 
   // ---------------------------------------------------------------------------
   // 2. Implicit cost warnings
@@ -181,11 +209,11 @@ export const synthesizeSiteAnalysis = (terrainData, siteState = {}, constraints 
 
   return {
     yieldWaterfall: waterfall,
-    effectiveArea,
+    effectiveArea:  safeEffectiveArea,
     finalPolygon,
     implicitCosts: warnings,
     summary: {
-      text: `Site analysis reveals an effective buildable area of ${Math.round(effectiveArea)}m² after deducting setbacks, easements, and TPZ. ${setbackNote} ${riskSummary}`,
+      text: `Site analysis reveals an effective buildable area of ${safeEffectiveArea}m² after deducting setbacks, easements, and TPZ. ${setbackNote} ${riskSummary}`,
     },
   };
 };

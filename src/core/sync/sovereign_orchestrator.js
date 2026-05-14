@@ -15,11 +15,16 @@ const COUPLING_CONFIG = {
 };
 
 export const SovereignSyncOrchestrator = {
+  _timer: null,
+
   init() {
     console.log('[SovereignSync] Initializing Spatial-Financial Coupling...');
-    
+
     store.subscribe((state) => {
-      this.syncSpatialToFinancial(state);
+      // Debounce: only run sync 400ms after the last state change,
+      // preventing a full pipeline execution on every keystroke.
+      if (this._timer) clearTimeout(this._timer);
+      this._timer = setTimeout(() => this.syncSpatialToFinancial(state), 400);
     });
   },
 
@@ -36,8 +41,13 @@ export const SovereignSyncOrchestrator = {
     const finance = scenario.finance || {};
     const locks = scenario.financeLocks || {};
     
-    // 1. Calculate dynamic build area based on footprint
-    const footprint = terrainData?.footprint || (scenario.site?.area * 0.6) || 0;
+    // 1. Calculate dynamic build area based on footprint.
+    // terrainData.footprint doesn't exist — use effectiveArea from synthesis
+    // (the authoritative post-setback buildable area), falling back to 60% of site.
+    const effectiveArea = synthesis?.effectiveArea || 0;
+    const footprint = effectiveArea > 0
+      ? effectiveArea
+      : (parseFloat(scenario.site?.area) || 0) * 0.60;
     const calculatedBuildArea = Math.round(
       footprint * COUPLING_CONFIG.DEFAULT_FLOORS * COUPLING_CONFIG.DEFAULT_EFFICIENCY
     );
@@ -60,31 +70,41 @@ export const SovereignSyncOrchestrator = {
   },
 
   /**
-   * Maps synthesis alignment status to financial suggestions.
+   * Maps site investigation results to financial suggestions.
+   * Uses terrain slope (from terrainData) and synthesis warnings rather than
+   * the non-existent synthesis.alignment object.
    * Instead of forcing values, it updates "suggestions" in the state.
    */
   syncRisksToCosts(scenario, synthesis) {
-    if (!synthesis || !synthesis.alignment) return;
-
-    const alignment = synthesis.alignment;
+    const terrainData = scenario.site?.investigation?.terrainData;
     const suggestions = {};
 
-    // Logic: If Terrain Slope is CONFLICT, suggest higher Contingency
-    if (alignment.maxSlope?.status === 'CONFLICT') {
-      suggestions.contingencyPct = 12; // Suggest 12% instead of 5%
-      suggestions.contingencyNote = 'High terrain conflict: recommend 12% contingency for unforeseen site works.';
-    } else if (alignment.maxSlope?.status === 'ESTIMATED') {
-      suggestions.contingencyPct = 8;
-      suggestions.contingencyNote = 'Terrain estimated: recommend 8% contingency.';
+    // Slope-driven contingency suggestion
+    const maxSlope = terrainData?.slope || terrainData?.metrics?.maxSlope || 0;
+    if (maxSlope >= 15) {
+      suggestions.contingencyPct  = 12;
+      suggestions.contingencyNote = `Steep slope (${maxSlope.toFixed(1)}%): recommend 12% contingency for retaining and earthworks.`;
+    } else if (maxSlope >= 8) {
+      suggestions.contingencyPct  = 8;
+      suggestions.contingencyNote = `Moderate slope (${maxSlope.toFixed(1)}%): recommend 8% contingency.`;
     }
 
-    // Logic: If land area is CONFLICT, suggest higher siteWorks budget
-    if (alignment.siteArea?.status === 'CONFLICT') {
-      suggestions.siteWorksPremium = 25000; 
-      suggestions.siteWorksNote = 'Boundary conflict: suggest +$25k for survey and legal adjustments.';
+    // Synthesis implicit-cost warnings → flag premium site works
+    const implicitCosts = synthesis?.implicitCosts || [];
+    const hasCritical   = implicitCosts.some(w => w.type === 'CRITICAL');
+    if (hasCritical && !suggestions.contingencyPct) {
+      suggestions.contingencyPct  = 10;
+      suggestions.contingencyNote = 'Critical site risk detected: recommend minimum 10% contingency.';
     }
 
-    // Update suggestions in store (new system.financeSuggestions state)
+    // Area inconsistency: surveyed vs OSM area differ >10% → flag survey cost
+    const surveyedArea = parseFloat(scenario.site?.area) || 0;
+    const osmArea      = terrainData?.area || 0;
+    if (surveyedArea > 0 && osmArea > 0 && Math.abs(surveyedArea - osmArea) / surveyedArea > 0.10) {
+      suggestions.siteWorksPremium = 25000;
+      suggestions.siteWorksNote   = 'Area inconsistency between surveyed and OSM data: suggest +$25k for survey clarification.';
+    }
+
     store.dispatch('system.financeSuggestions', suggestions);
   },
 

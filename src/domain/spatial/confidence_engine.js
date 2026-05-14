@@ -19,13 +19,14 @@ export const ConfidenceEngine = {
 
     const diff       = Math.abs(simVal - extVal);
     const avg        = (simVal + extVal) / 2;
-    const divergence = avg !== 0 ? (diff / avg) * 100 : 0;
+    const divergence = (avg !== 0 && Number.isFinite(diff / avg)) ? (diff / avg) * 100 : 0;
 
     if (diff <= tolerance) {
       return { score: 100, level: 'VERIFIED', note: 'Perfect alignment' };
     }
 
-    const score = Math.max(0, 100 - (divergence * 2));
+    const rawScore = 100 - (divergence * 2);
+    const score    = Number.isFinite(rawScore) ? Math.min(100, Math.max(0, rawScore)) : 0;
     const level = score >= 80 ? 'VERIFIED' : score >= 50 ? 'EXTRACTED' : 'CONFLICT';
     const note  = score < 50 ? 'Critical discrepancy' : 'Moderate divergence';
 
@@ -66,7 +67,7 @@ export const ConfidenceEngine = {
         name:       'Planning (Zone)',
         weight:     20,
         // Reliable when a zone code is present (user entered or extracted from docs)
-        isReliable: !!(plan.zone && plan.zone !== 'NRZ' || plan.zone === 'NRZ' && site.address)
+        isReliable: !!(plan.zoneCode || plan.zone)
       },
       {
         name:       'Market Data (GRV per Unit)',
@@ -96,8 +97,9 @@ export const ConfidenceEngine = {
       if (p.isReliable) earnedScore += p.weight;
     });
 
-    const score  = totalWeight > 0 ? Math.round((earnedScore / totalWeight) * 100) : 0;
-    const rating = score >= 85 ? 'High' : score >= 55 ? 'Medium' : 'Low';
+    const rawScore = totalWeight > 0 ? (earnedScore / totalWeight) * 100 : 0;
+    const score    = Math.min(100, Math.max(0, Number.isFinite(rawScore) ? Math.round(rawScore) : 0));
+    const rating   = score >= 85 ? 'High' : score >= 55 ? 'Medium' : 'Low';
 
     return {
       score,

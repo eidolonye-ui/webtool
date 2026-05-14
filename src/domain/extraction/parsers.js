@@ -23,25 +23,27 @@ export const parseVicPlanText = (text) => {
     rawLines: t.split("\n").slice(0, 60)
   };
 
-  /* 1. ZONE DETECTION */
-  const codeInParen = t.match(/\(\s*(NRZ|GRZ|RGZ|MUZ|C1Z|C2Z|LDRZ)\s*(\d+)?\s*\)/i);
-  if (codeInParen) {
-    result.zone = (codeInParen[1] + (codeInParen[2] || "")).toUpperCase();
-  }
+  /* 1. ZONE DETECTION — priority: code+digit > schedule notation > code in parens > full name > bare code */
 
+  // 1a. Direct code immediately followed by digit: GRZ1, NRZ2, IN1Z3, etc.
+  const directWithDigit = t.match(/\b(NRZ|GRZ|RGZ|LDRZ|MUZ|C1Z|C2Z|CAZ|ACZ|UAZ|IN1Z|IN2Z|IN3Z|PUZ|PPRZ|FZ|CDZ|GWZ)\s*(\d+)\b/i);
+  if (directWithDigit) result.zone = (directWithDigit[1] + directWithDigit[2]).toUpperCase();
+
+  // 1b. "Code - Schedule N" or "Code – Schedule N" (common in VicPlan certificates)
   if (!result.zone) {
-    const codeSchedule = t.match(/\b(NRZ|GRZ|RGZ|MUZ|C1Z|C2Z|LDRZ)\s*[-]?\s*Schedule\s+(\d+)/i) ||
-      t.match(/Schedule\s+(\d+)\s*[-]?\s*(?:to\s+the\s+)?(NRZ|GRZ|RGZ|MUZ|C1Z|C2Z|LDRZ)/i);
+    const codeSchedule = t.match(/\b(NRZ|GRZ|RGZ|LDRZ|MUZ|C1Z|C2Z|CAZ|ACZ|UAZ|IN1Z|IN2Z|IN3Z|PUZ|FZ|CDZ|GWZ)\s*[-–]?\s*Schedule\s+(\d+)/i) ||
+      t.match(/Schedule\s+(\d+)\s*[-–]?\s*(?:to\s+the\s+)?(NRZ|GRZ|RGZ|LDRZ|MUZ|C1Z|C2Z|CAZ|ACZ|UAZ|IN1Z|IN2Z|IN3Z|PUZ|FZ|CDZ|GWZ)/i);
     if (codeSchedule) {
-      const code = codeSchedule[1].length <= 4 ? codeSchedule[1] : codeSchedule[2];
-      const sched = codeSchedule[1].length <= 4 ? codeSchedule[2] : codeSchedule[1];
+      const code  = codeSchedule[1].length <= 5 ? codeSchedule[1] : codeSchedule[2];
+      const sched = codeSchedule[1].length <= 5 ? codeSchedule[2] : codeSchedule[1];
       result.zone = (code + sched).toUpperCase();
     }
   }
 
+  // 1c. "(GRZ1)" in parentheses — only use if digit is present; "(GRZ)" alone is ambiguous
   if (!result.zone) {
-    const codeAlone = t.match(/\b(NRZ\d+|GRZ\d+|RGZ\d+|NRZ|GRZ|RGZ|MUZ|C1Z|C2Z|LDRZ)\b/i);
-    if (codeAlone) result.zone = codeAlone[1].toUpperCase();
+    const codeInParen = t.match(/\(\s*(NRZ|GRZ|RGZ|LDRZ|MUZ|C1Z|C2Z|CAZ|ACZ|UAZ|IN1Z|IN2Z|IN3Z|PUZ|FZ|CDZ|GWZ)\s*(\d+)\s*\)/i);
+    if (codeInParen) result.zone = (codeInParen[1] + codeInParen[2]).toUpperCase();
   }
 
   if (!result.zone) {
@@ -80,8 +82,8 @@ export const parseVicPlanText = (text) => {
       { rx: /Environmental\s+Significance\s+Overlay|\bESO\s*\d*\b/i, flag: "hasESO", label: "Environmental Significance Overlay (ESO)" },
       { rx: /Special\s+Building\s+Overlay|\bSBO\s*\d*\b|Land\s+Subject\s+to\s+Inundation|\bLSIO\s*\d*\b/i, flag: "hasSBO", label: "Flood Risk Overlay (SBO/LSIO)" },
       { rx: /Bushfire\s+Management\s+Overlay|\bBMO\s*\d*\b/i, flag: "hasBMO", label: "Bushfire Management Overlay (BMO)" },
-      { rx: /Aboriginal\s+Cultural\s+Heritage\s+Overlay|\bACHO\b/i, flag: "hasAboriginal", label: "Aboriginal Cultural Heritage Overlay (ACHO)" },
-      { rx: /Geotechnical\s+Overlay|Landslip\s+Overlay|\bEMO\s*\d*\b|Erosion\s+Management\s+Overlay/i, flag: "hasGeo", label: "Geotechnical/Erosion Overlay (EMO)" },
+      { rx: /Aboriginal\s+Cultural\s+Heritage\s+Overlay|\bACHO\b/i, flag: "hasACHO", label: "Aboriginal Cultural Heritage Overlay (ACHO)" },
+      { rx: /Geotechnical\s+Overlay|Landslip\s+Overlay|\bEMO\s*\d*\b|Erosion\s+Management\s+Overlay/i, flag: "hasEMO", label: "Geotechnical/Erosion Overlay (EMO)" },
       { rx: /Design\s+and\s+Development\s+Overlay|\bDDO\s*\d*\b/i, flag: "hasDDO", label: "Design & Development Overlay (DDO)" },
     ];
     overlayDefs.forEach(({ rx, flag, label }) => { if (rx.test(t)) result.overlays.push({ flag, label }); });
@@ -108,11 +110,11 @@ export const parseVicPlanText = (text) => {
   if (areaM) result.area = areaM[1].replace(/,/g, "");
 
   /* 7. LOT / PLAN REFERENCE */
-  const lotM = t.match(/Lot\s+(\d+)\s+(?:on\s+)?(?:LP|PS|TP|SP|CP)\s*(\d+)/i);
-  if (lotM) result.lot = `Lot ${lotM[1]} on ${lotM[0].match(/\\bPS\\b/i) ? "PS" : "LP"}${lotM[2]}`;
+  const lotM = t.match(/Lot\s+(\d+[A-Z]?)\s+(?:on\s+)?(PS|LP|TP|SP|CP|DP)\s*(\d+[A-Z]?)/i);
+  if (lotM) result.lot = `Lot ${lotM[1].toUpperCase()} on ${lotM[2].toUpperCase()}${lotM[3].toUpperCase()}`;
 
   /* 8. PROPERTY ADDRESS */
-  const addrM = t.match(/\\b(\\d{1,4}[A-Z]?)\\s+([A-Za-z][A-Za-z\\s'-]{2,40}(?:Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Court|Ct|Place|Pl|Way|Lane|Ln|Boulevard|Blvd|Crescent|Cres|Close|Cl|Grove|Gr|Terrace|Tce)[.]?)\\s*[,\\s]+([A-Za-z][A-Za-z\\s]{2,30})\\s+VIC\\s+(\\d{4})/i);
+  const addrM = t.match(/\b(\d{1,4}[A-Z]?)\s+([A-Za-z][A-Za-z\s'-]{2,40}(?:Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Court|Ct|Place|Pl|Way|Lane|Ln|Boulevard|Blvd|Crescent|Cres|Close|Cl|Grove|Gr|Terrace|Tce)[.]?)\s*[,\s]+([A-Za-z][A-Za-z\s]{2,30})\s+VIC\s+(\d{4})/i);
   if (addrM) result.address = `${addrM[1]} ${addrM[2].trim()}, ${addrM[3].trim()} VIC ${addrM[4]}`;
 
   /* 9. NATIVE VEGETATION */
@@ -127,9 +129,34 @@ export const parseVicPlanText = (text) => {
   return result;
 };
 
+/**
+ * Parses a Section 32 Vendor Statement to extract encumbrances, covenants,
+ * easements, services, outgoings and title details.
+ *
+ * Key improvement over v1: section-aware extraction.
+ * Victorian S32 documents have a predictable structure — covenant and easement
+ * information is concentrated under headings like:
+ *   "ENCUMBRANCES, CAVEATS AND NOTICES"
+ *   "RESTRICTIONS AND ENCUMBRANCES"
+ *   "PARTICULARS OF ENCUMBRANCES"
+ * We extract that section first and search within it for higher precision.
+ *
+ * Document reference numbers used on Victorian titles:
+ *   D######  — Dealing (most common for covenants, e.g. D151733)
+ *   A######  — (older dealings)
+ *   T######  — Transfer / Transaction dealing
+ *   AL###### — Affecting Land dealing
+ *   AT###### — (affecting transfer)
+ *   AF###### — (affecting)
+ *   AK###### — (caveat / affecting)
+ *   R######  — (Crown Grant reference)
+ *   PS###### — Plan of Subdivision reference
+ */
 export const parseSection32Text = (text) => {
   if (!text || !text.trim()) return null;
   const t = text.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
+  const tUpper = t.toUpperCase();
+
   const result = {
     hasSingleCovenant: false,
     hasEasement: false,
@@ -162,42 +189,152 @@ export const parseSection32Text = (text) => {
     hasPermit: false,
     permitNo: "",
     permitDesc: "",
-    covenantDocNums: []
+    covenantDocNums: [],
+    encumbranceSectionText: "",  // raw text of the encumbrances section (for display)
   };
 
-  if (/single[\s-]dwelling\s+covenant|no\s+subdivision|one\s+dwelling\s+only|restricted\s+to\s+one\s+dwelling|one\s+private\s+dwelling/i.test(t)) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // 1. Extract the ENCUMBRANCES / RESTRICTIONS section
+  //    This section contains covenants, easements, caveats, mortgages.
+  //    It ends at the next major section heading.
+  // ─────────────────────────────────────────────────────────────────────────
+  const encSectionRx = /(?:ENCUMBRANCES?[,\s]+CAVEATS?[,\s]+AND[,\s]+NOTICES?|ENCUMBRANCES?[,\s]+AND[,\s]+RESTRICTIONS?|RESTRICTIONS?[,\s]+AND[,\s]+ENCUMBRANCES?|PARTICULARS\s+OF\s+ENCUMBRANCES?|ENCUMBRANCES?\s+ON\s+TITLE)/i;
+  let encText = "";
+  const encIdx = tUpper.search(encSectionRx.source ? encSectionRx : new RegExp(encSectionRx.source, 'i'));
+  if (encIdx !== -1) {
+    // Extract up to 3000 chars; stop at the next ALL-CAPS heading
+    const slice = t.slice(encIdx, encIdx + 3000);
+    const nextHeadingM = slice.slice(100).match(/\n[A-Z][A-Z\s,&]+(?:\n|:)/);
+    result.encumbranceSectionText = nextHeadingM
+      ? slice.slice(0, 100 + nextHeadingM.index).trim()
+      : slice.trim();
+    encText = result.encumbranceSectionText;
+    result.hasEncumbrance = encText.length > 20;
+  }
+
+  // Primary search corpus: encumbrances section if found, else full text
+  const corpus = encText || t;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 2. Document reference numbers (Victorian title dealings)
+  //    D######, A######, T######, AL######, AT######, AF######, AK######, R######
+  // ─────────────────────────────────────────────────────────────────────────
+  const docNumRx = /\b([DATRK][0-9]{5,8}|A[LTKF][0-9]{5,8})\b/g;
+  const _docNums = [...corpus.matchAll(docNumRx)];
+  _docNums.forEach(m => {
+    const n = m[1];
+    if (!result.covenantDocNums.includes(n)) result.covenantDocNums.push(n);
+  });
+  // Also catch "Dealing No. D151733" / "Instrument No. D151733" formats anywhere in document
+  const dealingNums = [...t.matchAll(/\b(?:Dealing|Instrument|Document|Registration|Reference)\s+No\.?\s*([A-Z]{1,2}\d{5,8})\b/gi)];
+  dealingNums.forEach(m => {
+    const n = m[1];
+    if (!result.covenantDocNums.includes(n)) result.covenantDocNums.push(n);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 3. Single-dwelling covenant detection
+  //    Search encumbrances section first, then full document.
+  //    Comprehensive patterns covering typical Victorian covenant wording.
+  // ─────────────────────────────────────────────────────────────────────────
+  const singleDwellingRx = new RegExp(
+    'single[\\s-]dwelling\\s+covenant' +
+    '|one\\s+(?:private\\s+)?dwelling\\s+(?:house\\s+)?only' +
+    '|not\\s+to\\s+erect\\s+more\\s+than\\s+one\\s+(?:private\\s+)?dwelling' +
+    '|erect\\s+one\\s+(?:private\\s+)?dwelling\\s+house\\s+only' +
+    '|restricted\\s+to\\s+one\\s+(?:private\\s+)?dwelling' +
+    '|shall\\s+not\\s+erect\\s+any\\s+building\\s+other\\s+than\\s+(?:a\\s+)?(?:private\\s+)?dwelling' +
+    '|one\\s+house\\s+only' +
+    '|no\\s+more\\s+than\\s+one\\s+(?:private\\s+)?dwelling' +
+    '|one\\s+(?:single\\s+)?(?:private\\s+)?residential\\s+dwelling\\s+only',
+    'i'
+  );
+
+  const singleDwellingMatch = singleDwellingRx.test(corpus);
+  if (singleDwellingMatch) {
     result.hasSingleCovenant = true;
-    result.covenantDesc = "Single dwelling covenant  restricts to one private dwelling";
-  } else {
-    const covM = t.match(/(?:restrictive\s+)?covenant[^.;\n]{0,200}/i);
-    if (covM) { result.covenantDesc = covM[0].trim().slice(0, 150) + (covM[0].length > 150 ? "" : ""); }
+    const covM = corpus.match(singleDwellingRx);
+    // Expand context around the match
+    const matchIdx = corpus.search(singleDwellingRx);
+    const ctx = corpus.slice(Math.max(0, matchIdx - 30), matchIdx + 200);
+    result.covenantDesc = ctx.trim().slice(0, 250);
   }
 
-  const mcpM = t.match(/(?:memorandum\s+of\s+common\s+provisions?|\bMCP\b|common\s+provisions?)[^.;\n]{0,200}/i);
-  if (mcpM) { result.hasMCP = true; result.mcpDesc = mcpM[0].trim().slice(0, 150) + (mcpM[0].length > 150 ? "" : ""); }
-
-  if (!result.hasSingleCovenant && /restrictive\s+covenant|registered\s+covenant|restrictive\s+agreement/i.test(t)) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // 4. No-subdivision covenant
+  // ─────────────────────────────────────────────────────────────────────────
+  if (!result.hasSingleCovenant && /no\s+subdivision|cannot\s+be\s+(?:further\s+)?divided|shall\s+not\s+be\s+subdivided|not\s+to\s+be\s+subdivided/i.test(corpus)) {
     result.hasRestrictiveCovenant = true;
-    const rcM = t.match(/restrictive\s+covenant[^.;\n]{0,200}/i);
-    if (rcM && !result.covenantDesc) result.restrictiveCovenantDesc = rcM[0].trim().slice(0, 150) + (rcM[0].length > 150 ? "" : "");
+    const rcM = corpus.match(/(?:no\s+subdivision|shall\s+not\s+be\s+subdivided)[^.;\n]{0,200}/i);
+    if (rcM) result.restrictiveCovenantDesc = rcM[0].trim().slice(0, 200);
+    if (!result.covenantDesc) result.covenantDesc = result.restrictiveCovenantDesc;
   }
 
-  const eM = t.match(/easement[^.;\n]{0,150}/i);
+  // ─────────────────────────────────────────────────────────────────────────
+  // 5. General restrictive covenant (fallback)
+  //    Also extract covenant description from near D-numbers in encumbrances section
+  // ─────────────────────────────────────────────────────────────────────────
+  if (!result.hasSingleCovenant && !result.hasRestrictiveCovenant) {
+    if (/restrictive\s+covenant|registered\s+covenant|restrictive\s+agreement/i.test(corpus)) {
+      result.hasRestrictiveCovenant = true;
+    }
+    const covM = corpus.match(/(?:restrictive\s+)?covenant[^.;\n]{0,200}/i);
+    if (covM && !result.covenantDesc) {
+      result.covenantDesc = covM[0].trim().slice(0, 200);
+    }
+  }
+
+  // If we found doc numbers in the encumbrances section, try to extract
+  // content associated with each number (line following the number)
+  if (result.covenantDocNums.length && !result.covenantDesc && encText) {
+    const firstNum = result.covenantDocNums[0];
+    const numIdx = encText.indexOf(firstNum);
+    if (numIdx !== -1) {
+      result.covenantDesc = encText.slice(numIdx, numIdx + 300).trim();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 6. Memorandum of Common Provisions (MCP)
+  // ─────────────────────────────────────────────────────────────────────────
+  const mcpM = t.match(/(?:memorandum\s+of\s+common\s+provisions?|\bMCP\b|common\s+provisions?)[^.;\n]{0,200}/i);
+  if (mcpM) { result.hasMCP = true; result.mcpDesc = mcpM[0].trim().slice(0, 150); }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 7. Easements — search in encumbrances section first
+  // ─────────────────────────────────────────────────────────────────────────
+  const eM = corpus.match(/easement[^.;\n]{0,200}/i);
   if (eM) {
     result.hasEasement = true;
-    result.easementDesc = eM[0].trim().slice(0, 120);
+    result.easementDesc = eM[0].trim().slice(0, 150);
     const widthM = eM[0].match(/(\d+\.?\d*)\s*m(?:etre|eter)?s?\b/i) || eM[0].match(/(\d+\.?\d*)\s*m\b/);
     if (widthM) result.easementWidthM = widthM[1];
     const widthLinks = eM[0].match(/(\d+\.?\d*)\s*links?/i);
-    if (widthLinks && !result.easementWidthM) result.easementWidthM = String((parseFloat(widthLinks[1]) * 0.201168).toFixed(2));
+    if (widthLinks && !result.easementWidthM)
+      result.easementWidthM = String((parseFloat(widthLinks[1]) * 0.201168).toFixed(2));
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 8. Section 173 Agreement
+  // ─────────────────────────────────────────────────────────────────────────
   if (/section\s+173|s\.?\s*173\s+agreement/i.test(t)) {
     result.hasS173 = true;
     const s173M = t.match(/section\s+173[^.;\n]{0,200}/i);
-    if (s173M) result.s173Desc = s173M[0].trim().slice(0, 150) + (s173M[0].length > 150 ? "" : "");
+    if (s173M) result.s173Desc = s173M[0].trim().slice(0, 200);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 9. Mortgage / Charge / Caveat
+  // ─────────────────────────────────────────────────────────────────────────
+  const mortM = t.match(/(?:mortgage|charge)[^.;\n]{0,150}/i);
+  if (mortM && !/no\s+mortgage|no\s+charge/i.test(mortM[0])) {
+    result.hasMortgage = true;
+    result.mortgageDesc = mortM[0].trim().slice(0, 120);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 10. Land area + lot reference
+  // ─────────────────────────────────────────────────────────────────────────
   const areaM = t.match(/(?:total\s+area|lot\s+area|site\s+area|area\s+of\s+land|land\s+area)[:\s]+(\d[\d,]*\.?\d*)\s*(m2|m|sq\.?m|square\s+metres?|ha|hectares?)/i);
   if (areaM) {
     let area = areaM[1].replace(/,/g, "");
@@ -211,21 +348,21 @@ export const parseSection32Text = (text) => {
     result.lot = `Lot ${lotM[1].toUpperCase()} on ${planType}${lotM[2].toUpperCase()}`;
   }
 
-  const mortM = t.match(/(?:mortgage|charge)[^.;\n]{0,150}/i);
-  if (mortM && !/no\s+mortgage|no\s+charge/i.test(mortM[0])) {
-    result.hasMortgage = true;
-    result.mortgageDesc = mortM[0].trim().slice(0, 120) + (mortM[0].length > 120 ? "" : "");
-  }
-
-  const encM = t.match(/encumbrance[^.;\n]{0,150}/i);
-  if (encM) { result.hasEncumbrance = true; result.encumbranceDesc = encM[0].trim().slice(0, 120); }
-
-  const vendorM = t.match(/(?:vendor|owner|registered\s+proprietor)[:\s]+([A-Z][A-Za-z\s'-]{3,60})(?:\n|,|\()/i);
-  if (vendorM) result.vendorName = vendorM[1].trim();
-
+  // ─────────────────────────────────────────────────────────────────────────
+  // 11. Title reference (Volume / Folio)
+  // ─────────────────────────────────────────────────────────────────────────
   const ctM = t.match(/(?:Volume|Vol\.?)\s+(\d+)\s+(?:Folio|Fol\.?)\s+(\d+)/i);
   if (ctM) { result.titleVolume = ctM[1]; result.titleFolio = ctM[2]; }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 12. Vendor / Registered proprietor
+  // ─────────────────────────────────────────────────────────────────────────
+  const vendorM = t.match(/(?:vendor|owner|registered\s+proprietor)[:\s]+([A-Z][A-Za-z\s'-]{3,60})(?:\n|,|\()/i);
+  if (vendorM) result.vendorName = vendorM[1].trim();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 13. Services / utilities
+  // ─────────────────────────────────────────────────────────────────────────
   const svcSection = t.match(/(?:services?|utilities|connections?)[:\s-]+([^\n]{0,600})/i)?.[1] || t;
   const parseService = (rx) => {
     const m = svcSection.match(rx);
@@ -233,12 +370,15 @@ export const parseSection32Text = (text) => {
     const after = (svcSection.slice(svcSection.search(rx)).match(/(?:yes|no|connected|not\s+connected|available|unavailable)/i) || [""])[0];
     return after ? after.replace(/not\s+connected|unavailable/i, "No").replace(/connected|available|yes/i, "Yes") : "";
   };
-  result.servicesElec = parseService(/electricity/i) || (/electricity[^.]{0,50}yes/i.test(t) ? "Yes" : /electricity[^.]{0,50}no\b/i.test(t) ? "No" : "");
-  result.servicesGas = parseService(/\bgas\b/i) || (/\bgas[^.]{0,50}yes/i.test(t) ? "Yes" : /\bgas[^.]{0,50}no\b/i.test(t) ? "No" : "");
-  result.servicesWater = parseService(/water/i) || (/water[^.]{0,50}yes/i.test(t) ? "Yes" : /water[^.]{0,50}no\b/i.test(t) ? "No" : "");
+  result.servicesElec  = parseService(/electricity/i) || (/electricity[^.]{0,50}yes/i.test(t) ? "Yes" : /electricity[^.]{0,50}no\b/i.test(t) ? "No" : "");
+  result.servicesGas   = parseService(/\bgas\b/i)    || (/\bgas[^.]{0,50}yes/i.test(t) ? "Yes" : /\bgas[^.]{0,50}no\b/i.test(t) ? "No" : "");
+  result.servicesWater = parseService(/water/i)       || (/water[^.]{0,50}yes/i.test(t) ? "Yes" : /water[^.]{0,50}no\b/i.test(t) ? "No" : "");
   result.servicesSewer = parseService(/sewer(?:age)?/i) || (/sewer[^.]{0,50}yes/i.test(t) ? "Yes" : /sewer[^.]{0,50}no\b/i.test(t) ? "No" : "");
-  result.servicesTel = parseService(/telephone|telecommunications?|nbn/i) || (/(?:telephone|nbn)[^.]{0,50}yes/i.test(t) ? "Yes" : /(?:telephone|nbn)[^.]{0,50}no\b/i.test(t) ? "No" : "");
+  result.servicesTel   = parseService(/telephone|telecommunications?|nbn/i) || (/(?:telephone|nbn)[^.]{0,50}yes/i.test(t) ? "Yes" : /(?:telephone|nbn)[^.]{0,50}no\b/i.test(t) ? "No" : "");
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 14. Outgoings
+  // ─────────────────────────────────────────────────────────────────────────
   const crM = t.match(/council\s+rates?[:\s$]+(\d[\d,]*\.?\d*)\s*(?:per\s+annum|p\.?a\.?|\/yr|\/year|per\s+quarter|per\s+qtr)?/i);
   if (crM) result.councilRatesAmt = crM[1].replace(/,/g, "");
   const wrM = t.match(/water\s+(?:rates?|charges?)[:\s$]+(\d[\d,]*\.?\d*)/i);
@@ -246,15 +386,13 @@ export const parseSection32Text = (text) => {
   const ltM = t.match(/land\s+tax[:\s$]+(\d[\d,]*\.?\d*)/i);
   if (ltM) result.landTaxAmt = ltM[1].replace(/,/g, "");
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 15. Planning permits on title
+  // ─────────────────────────────────────────────────────────────────────────
   const ppM = t.match(/planning\s+permit[:\s#]+([A-Z0-9\/-]{4,20})/i);
   if (ppM) { result.hasPermit = true; result.permitNo = ppM[1]; }
   const ppDesc = t.match(/permit(?:ted)?\s+(?:for|to)[:\s]+([^.;\n]{0,100})/i);
   if (ppDesc) result.permitDesc = ppDesc[1].trim().slice(0, 80);
-
-  const _docNums = [...t.matchAll(/\b(?:Dealing|Instrument|Document|Registration|Reference)\s+No\.?\s*([A-Z]\d{5,8})\b/gi)];
-  _docNums.forEach(m => { const n = m[1]; if (!result.covenantDocNums.includes(n)) result.covenantDocNums.push(n); });
-  const _standaloneNums = [...t.matchAll(/\b([DTE]\d{6,8})\b/g)];
-  _standaloneNums.forEach(m => { const n = m[1]; if (!result.covenantDocNums.includes(n) ) result.covenantDocNums.push(n); });
 
   return result;
 };

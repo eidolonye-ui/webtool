@@ -2,10 +2,55 @@
  * @file domain/export/export_engine.js
  * @description Unified export logic for PDF, Markdown, and JSON.
  * Supports Strategic Report, Obsidian Vault export, and Scenario Comparisons.
- * @version 2.1.0 - Added generateObsidianMD with full property vault schema
+ * @version 2.2.0 - Fix plan.zone → plan.zoneCode || plan.zone;
+ *                  Add overlay flags, location score, effective buildable area,
+ *                  and services info to both report generators.
  */
 
 import { fmt, fmtM, pct } from '../../core/utils/formatters.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Returns a canonical zone string from a planning object. */
+const resolveZone = (plan) => (plan?.zoneCode || plan?.zone || 'N/A').trim();
+
+/** Returns a compact overlay summary string, e.g. "HO, VPO, DDO". */
+const activeOverlays = (plan) => {
+  if (!plan) return 'None';
+  const flags = [
+    plan.hasHO   && 'HO',
+    plan.hasVPO  && 'VPO',
+    plan.hasSBO  && 'SBO',
+    plan.hasBMO  && 'BMO',
+    plan.hasDDO  && 'DDO',
+    plan.hasSLO  && 'SLO',
+    plan.hasESO  && 'ESO',
+    plan.hasACHO && 'ACHO',
+    plan.hasEMO  && 'EMO',
+  ].filter(Boolean);
+  if (plan.hasSingleCovenant) flags.push('Single Dwelling Covenant');
+  if (plan.hasS173)           flags.push('S.173 Agreement');
+  if (plan.hasEasementBoe)    flags.push('Easement (BOE)');
+  return flags.length > 0 ? flags.join(', ') : 'None';
+};
+
+/** Returns a compact services string. */
+const servicesLine = (plan) => {
+  if (!plan) return 'N/A';
+  const s = [
+    plan.servicesElec  && 'Electricity',
+    plan.servicesGas   && 'Gas',
+    plan.servicesWater && 'Water',
+    plan.servicesSewer && 'Sewer',
+  ].filter(Boolean);
+  return s.length > 0 ? s.join(', ') : 'Not confirmed';
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Strategic Report (Markdown)
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Generates a high-level strategic report in Markdown format.
@@ -15,9 +60,18 @@ export const generateStrategicReport = (state, calculations, insights = null) =>
   const isoDate = new Date().toISOString().slice(0, 10);
   const d       = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
   const addr    = (site?.address || 'Address not entered').trim();
+  const zone    = resolveZone(plan);
 
   const margin = calculations?.margin || 0;
   const rating = margin >= 20 ? 'HIGHLY VIABLE' : margin >= 15 ? 'VIABLE' : margin >= 10 ? 'MARGINAL' : 'RISKY';
+
+  // Location score from store investigation path
+  const locScore = site?.investigation?.locationData?.score;
+  const locRating = locScore != null ? `${locScore}/100` : 'Not analysed';
+
+  // Effective buildable area from synthesis
+  const effectiveArea = site?.investigation?.synthesis?.effectiveArea;
+  const effectiveAreaStr = effectiveArea != null ? `${effectiveArea} m²` : 'Not calculated';
 
   return [
     `---`,
@@ -47,7 +101,31 @@ export const generateStrategicReport = (state, calculations, insights = null) =>
     `| Estimated IRR | ${calculations?.irr?.toFixed(2) || '0.00'}% |`,
     `| Land Acquisition Cost | ${fmt(calculations?.land || 0)} |`,
     ``,
-    `## 3. Funding & Drawdown (S-Curve Model)`,
+    `## 3. Site & Planning`,
+    `| Attribute | Value |`,
+    `| :--- | :--- |`,
+    `| Zone | ${zone} |`,
+    `| Site Area | ${site?.area || 0} m² |`,
+    `| Frontage | ${site?.frontage || 0} m |`,
+    `| Depth | ${site?.depth || 0} m |`,
+    `| Effective Buildable Area | ${effectiveAreaStr} |`,
+    `| Build Area | ${finance?.buildArea || 0} m² |`,
+    `| Build Cost | $${finance?.buildCostPSM || 0}/m² |`,
+    `| Active Overlays | ${activeOverlays(plan)} |`,
+    `| Covenants / Agreements | ${plan?.hasSingleCovenant ? 'Single Dwelling Covenant' : plan?.hasS173 ? 'S.173 Agreement' : 'None detected'} |`,
+    `| Site Services | ${servicesLine(plan)} |`,
+    ``,
+    `## 4. Location Score`,
+    `| Metric | Value |`,
+    `| :--- | :--- |`,
+    `| Overall Score | ${locRating} |`,
+    locScore != null && site?.investigation?.locationData?.breakdown
+      ? Object.entries(site.investigation.locationData.breakdown || {})
+          .map(([k, v]) => `| ${k.charAt(0).toUpperCase() + k.slice(1)} | ${v?.score ?? '-'}/${v?.max ?? '-'} pts |`)
+          .join('\n')
+      : `| Detail | Run Site Investigation to generate location score |`,
+    ``,
+    `## 5. Funding & Drawdown (S-Curve Model)`,
     `The project utilizes a dynamic S-Curve funding model for capitalized interest calculation.`,
     `\`\`\``,
     (calculations?.drawdownSchedule || []).slice(0, 6).map(item =>
@@ -56,7 +134,7 @@ export const generateStrategicReport = (state, calculations, insights = null) =>
     `\`\`\``,
     `*${calculations?.drawdownSchedule?.length > 6 ? `(Showing first 6 of ${calculations.drawdownSchedule.length} months)` : ''}*`,
     ``,
-    `## 4. Strategic AI Insights`,
+    `## 6. Strategic AI Insights`,
     insights
       ? `### Risk Assessment: ${insights.riskLevel}`
         + `\n- **Reason:** ${insights.riskReason}`
@@ -66,24 +144,16 @@ export const generateStrategicReport = (state, calculations, insights = null) =>
       : `*AI Insights not generated for this project.*`,
     ``,
     `---`,
-    `## 5. Project Parameters`,
-    `- **Zoning:** ${plan?.zone || 'N/A'}`,
-    `- **Site Area:** ${site?.area || 0} sqm`,
-    `- **Build Area:** ${finance?.buildArea || 0} sqm`,
-    `- **Build Cost:** $${finance?.buildCostPSM || 0}/sqm`,
-    `---`,
     `*End of Strategic Report*`,
   ].join('\n');
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Obsidian MD export
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Generates a property analysis note formatted for Obsidian vault ingestion.
- *
- * Output follows the Obsidian YAML front matter standard with:
- *   - Dataview-compatible property fields
- *   - Wikilinks to zone and suburb pages
- *   - Callout blocks for risk signals
- *   - Tagged sections for search/filter
  *
  * @param {Object} state        - Full store state
  * @param {Object} calculations - Output from calculateProjectFinances
@@ -101,7 +171,7 @@ export const generateObsidianMD = (state, calculations, insights = null) => {
   const isoDate = new Date().toISOString().slice(0, 10);
   const addr    = (site?.address || 'Unknown Address').trim();
   const suburb  = addr.split(',')[1]?.trim() || 'Melbourne';
-  const zone    = plan?.zone || 'NRZ';
+  const zone    = resolveZone(plan);
 
   const margin = calculations?.margin       || 0;
   const profit = calculations?.profit       || 0;
@@ -117,7 +187,18 @@ export const generateObsidianMD = (state, calculations, insights = null) => {
 
   const fatalRisks = scenario?.site?.investigation?.synthesis?.fatalRisks || [];
   const alerts     = scenario?.site?.investigation?.synthesis?.activeAlerts || [];
-  const projMonths = fin?.projectMonths || scenario?.finance?.projectMonths || 24;
+  const projMonths = fin?.projectMonths || 24;
+
+  // Location score
+  const locData   = site?.investigation?.locationData || {};
+  const locScore  = locData?.score;
+  const locBreak  = locData?.breakdown || {};
+
+  // Spatial
+  const effectiveArea = site?.investigation?.synthesis?.effectiveArea;
+
+  const overlayStr  = activeOverlays(plan);
+  const servicesStr = servicesLine(plan);
 
   const lines = [];
 
@@ -139,6 +220,8 @@ export const generateObsidianMD = (state, calculations, insights = null) => {
   lines.push(`cap_interest: ${capInt}`);
   lines.push(`project_months: ${projMonths}`);
   lines.push(`lvr_pct: ${financing?.lvrPct || 65}`);
+  lines.push(`location_score: ${locScore != null ? locScore : 'N/A'}`);
+  lines.push(`overlays: "${overlayStr}"`);
   lines.push(`tags: [property, feasibility, ${ratingTag}, ${zone.toLowerCase()}, ${suburb.toLowerCase().replace(/\s+/g, '-')}]`);
   lines.push('---');
   lines.push('');
@@ -158,10 +241,40 @@ export const generateObsidianMD = (state, calculations, insights = null) => {
   lines.push(`| Address | ${addr} |`);
   lines.push(`| Suburb | [[${suburb}]] |`);
   lines.push(`| Zone | [[${zone}]] |`);
-  lines.push(`| Site Area | ${site?.area || 0} m2 |`);
+  lines.push(`| Site Area | ${site?.area || 0} m² |`);
   lines.push(`| Frontage | ${site?.frontage || 0} m |`);
   lines.push(`| Depth | ${site?.depth || 0} m |`);
+  lines.push(`| Effective Buildable Area | ${effectiveArea != null ? effectiveArea + ' m²' : 'Not calculated'} |`);
   lines.push('');
+
+  // Planning & Constraints
+  lines.push('## Planning & Constraints');
+  lines.push('');
+  lines.push('| Attribute | Value |');
+  lines.push('| :--- | :--- |');
+  lines.push(`| Zone | ${zone} |`);
+  lines.push(`| Max Height | ${plan?.maxHeight || 'N/A'} m |`);
+  lines.push(`| Min Lot Size | ${plan?.minLotSize || 'N/A'} m² |`);
+  lines.push(`| Active Overlays | ${overlayStr} |`);
+  lines.push(`| Covenants / S.173 | ${plan?.hasSingleCovenant ? '⚠️ Single Dwelling Covenant' : plan?.hasS173 ? '⚠️ S.173 Agreement' : 'None detected'} |`);
+  lines.push(`| Site Services | ${servicesStr} |`);
+  if (plan?.s173Details) lines.push(`| S.173 Details | ${plan.s173Details} |`);
+  lines.push('');
+
+  // Location Score
+  if (locScore != null) {
+    lines.push('## Location Score');
+    lines.push('');
+    lines.push(`**Overall: ${locScore}/100**`);
+    lines.push('');
+    lines.push('| Pillar | Score | Max |');
+    lines.push('| :--- | :--- | :--- |');
+    Object.entries(locBreak).forEach(([k, v]) => {
+      const label = k.charAt(0).toUpperCase() + k.slice(1);
+      lines.push(`| ${label} | ${v?.score ?? '-'} | ${v?.max ?? '-'} |`);
+    });
+    lines.push('');
+  }
 
   // Financial Analysis
   lines.push('## Financial Analysis');
@@ -249,6 +362,10 @@ export const generateObsidianMD = (state, calculations, insights = null) => {
   return lines.join('\n');
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// JSON backup
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Exports the current full state to a JSON string for backup or sharing.
  */
@@ -256,13 +373,14 @@ export const exportProjectJSON = (state) => {
   return JSON.stringify({
     ...state,
     exportDate: new Date().toISOString(),
-    version: '2.1.0'
+    version: '2.2.0'
   }, null, 2);
 };
 
-/**
- * Professional PDF export wrapper.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF export
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Lazy-load jsPDF from CDN on first use — avoids index.html dependency
 const loadJsPDF = () => new Promise((resolve, reject) => {
   if (window.jspdf) return resolve(window.jspdf);
@@ -274,25 +392,34 @@ const loadJsPDF = () => new Promise((resolve, reject) => {
 });
 
 export const exportToPDF = async (state, calculations) => {
+  const scenario = state?.scenarios?.[state?.system?.activeScenarioId] || state;
+  const site     = scenario?.site     || state?.site     || {};
+  const plan     = scenario?.planning || state?.plan     || {};
+  const fin      = scenario?.finance  || state?.finance  || {};
+
   const jspdfLib = await loadJsPDF();
   const { jsPDF } = jspdfLib;
   const doc = new jsPDF();
 
   const margin = calculations?.margin || 0;
   const rating = margin >= 20 ? 'HIGHLY VIABLE' : margin >= 15 ? 'VIABLE' : margin >= 10 ? 'MARGINAL' : 'RISKY';
+  const zone   = resolveZone(plan);
+  const addr   = site?.address || 'N/A';
 
+  // Header
   doc.setFontSize(20);
   doc.setTextColor(40);
   doc.text('Project Feasibility Report', 10, 20);
 
   doc.setFontSize(12);
   doc.setTextColor(100);
-  doc.text(`Site: ${state.site?.address || 'N/A'}`, 10, 30);
-  doc.text(`Status: ${rating}`, 10, 37);
+  doc.text(`Site: ${addr}`, 10, 30);
+  doc.text(`Zone: ${zone}  |  Status: ${rating}`, 10, 37);
 
   doc.setDrawColor(200);
   doc.line(10, 45, 200, 45);
 
+  // Financial Summary
   doc.setFontSize(14);
   doc.setTextColor(0);
   doc.text('Financial Summary', 10, 55);
@@ -310,22 +437,43 @@ export const exportToPDF = async (state, calculations) => {
 
   metrics.forEach((m, i) => {
     doc.text(`${m.label}:`, 15, 65 + (i * 8));
-    doc.text(m.value, 120, 65 + (i * 8), { align: 'right' });
+    doc.text(m.value, 160, 65 + (i * 8), { align: 'right' });
   });
 
+  // Site & Planning
   doc.setFontSize(14);
-  doc.text('Funding Drawdown (Initial 6 Months)', 10, 120);
+  doc.setTextColor(0);
+  doc.text('Site & Planning', 10, 120);
+
+  doc.setFontSize(11);
+  doc.setTextColor(60);
+  const siteRows = [
+    { label: 'Zone',             value: zone },
+    { label: 'Site Area',        value: `${site?.area || 0} m²` },
+    { label: 'Frontage',         value: `${site?.frontage || 0} m` },
+    { label: 'Build Area',       value: `${fin?.buildArea || 0} m²` },
+    { label: 'Active Overlays',  value: activeOverlays(plan) },
+    { label: 'Services',         value: servicesLine(plan) },
+  ];
+  siteRows.forEach((r, i) => {
+    doc.text(`${r.label}:`, 15, 130 + (i * 7));
+    doc.text(String(r.value), 160, 130 + (i * 7), { align: 'right' });
+  });
+
+  // Drawdown
+  doc.setFontSize(12);
+  doc.setTextColor(0);
+  doc.text('Funding Drawdown (First 6 Months)', 10, 180);
   doc.setFontSize(10);
-  doc.text('Month | Drawdown Amount | Cumulative', 15, 130);
-  doc.line(15, 132, 100, 132);
+  doc.setTextColor(60);
 
   (calculations?.drawdownSchedule || []).slice(0, 6).forEach((item, i) => {
-    doc.text(`M${item.month} | ${fmt(item.amount)} | ${fmt(item.cumulative || 0)}`, 15, 140 + (i * 7));
+    doc.text(`M${item.month} | ${fmt(item.amount)} | Cumulative: ${fmt(item.cumulative || 0)}`, 15, 190 + (i * 7));
   });
 
   doc.setFontSize(10);
   doc.setTextColor(150);
   doc.text('Generated by WebTool SaaS Sovereign Engine', 105, 280, { align: 'center' });
 
-  return doc.save(`Professional_Report_${state.site?.address || 'Project'}.pdf`);
+  return doc.save(`Feasibility_${addr}.pdf`);
 };

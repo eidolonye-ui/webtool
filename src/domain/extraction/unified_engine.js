@@ -11,7 +11,7 @@
 import { parseDocumentWithAI }               from './ai_adapter.js';
 import { parseVicPlanText, parseSection32Text, parseSurveyPlan } from './parsers.js';
 import { evaluateConstraints }               from '../spatial/constraint_engine.js';
-import { performOCR, hasTextLayer }          from './ocr_worker.js';
+import { extractFileText }                   from './pdf_ocr.js';   // PDF.js + Tesseract OCR fallback
 import { mergeExtractionBatch }              from '../spatial/data_merger.js';
 
 // ---------------------------------------------------------------------------
@@ -42,6 +42,7 @@ export const FIELD_TO_PATH = {
   hasS173Agreement:     'planning.hasS173',
   s173Details:          'planning.s173Details',
   covenantDetails:      'planning.covenantDetails',
+  dealingNumbers:       'planning.dealingNumbers',   // Victorian title dealing refs (D######, AL######)
   hasMortgage:          'planning.hasMortgage',      // dynamic
 
   // Site dimensions (Survey Plan is highest-priority source; overrides API estimates)
@@ -58,6 +59,15 @@ export const FIELD_TO_PATH = {
   // Outgoings (from S32)
   councilRates:         'planning.councilRates',     // dynamic
   waterRates:           'planning.waterRates',       // dynamic
+
+  // Overlay schedule labels (e.g. ["HO295", "DDO12"])
+  overlayLabels:        'planning.overlayLabels',      // dynamic
+
+  // Services (from S32)
+  servicesElec:         'planning.servicesElec',       // dynamic
+  servicesGas:          'planning.servicesGas',        // dynamic
+  servicesWater:        'planning.servicesWater',      // dynamic
+  servicesSewer:        'planning.servicesSewer',      // dynamic
 
   // Analysis
   keyRisks:             'site.investigation.keyRisks',
@@ -85,6 +95,7 @@ export const FIELD_LABELS = {
   hasS173Agreement:     'Section 173 Agreement',
   s173Details:          'S.173 Details',
   covenantDetails:      'Covenant Details',
+  dealingNumbers:       'Title Dealing Numbers',
   hasMortgage:          'Mortgage / Charge Registered',
   siteArea:             'Surveyed Lot Area (m²)',
   siteFrontage:         'Lot Frontage (m)',
@@ -95,6 +106,11 @@ export const FIELD_LABELS = {
   councilName:          'Council / LGA',
   councilRates:         'Council Rates ($/yr)',
   waterRates:           'Water Rates ($/yr)',
+  overlayLabels:        'Overlay Schedule Numbers',
+  servicesElec:         'Electricity Connected',
+  servicesGas:          'Gas Connected',
+  servicesWater:        'Water Connected',
+  servicesSewer:        'Sewer Connected',
   keyRisks:             'Key Risk Factors',
   summary:              'Document Summary',
 };
@@ -129,20 +145,30 @@ export const normalizeVicPlanResult = (vpResult, aiResult) => {
   // Supplement with ai_adapter for things parsers.js doesn't cover
   if (aiResult?.fields) {
     const af = aiResult.fields;
-    // Only take zone from ai_adapter if parsers.js didn't find one
-    if (!fields.zoneCode && af.zoneCode)   fields.zoneCode   = af.zoneCode;
+    // Zone code: take the MORE SPECIFIC result (longer string = has schedule number).
+    // parsers.js can match bare "(GRZ)" without a schedule; ai_adapter often finds "GRZ1".
+    if (af.zoneCode) {
+      const vpZone = (fields.zoneCode || '').trim();
+      const aiZone = af.zoneCode.trim();
+      if (!vpZone || aiZone.length > vpZone.length) fields.zoneCode = aiZone;
+    }
     // Legal encumbrances from ai_adapter
     if (af.hasSingleCovenant)   fields.hasSingleCovenant  = true;
     if (af.hasEasement)         { fields.hasEasement = true; fields.easementDetails = af.easementDetails; }
     if (af.hasS173Agreement)    { fields.hasS173Agreement = true; fields.s173Details = af.s173Details; }
     if (af.hasMortgage)         fields.hasMortgage = true;
     if (af.covenantDetails)     fields.covenantDetails = af.covenantDetails;
+    // Overlay labels with schedule numbers (e.g. ["HO295", "DDO12"])
+    if (af.overlayLabels?.length) fields.overlayLabels = af.overlayLabels;
     // Overlay flags also from ai_adapter (if parsers.js missed them)
     ['hasHO','hasVPO','hasSBO','hasBMO','hasESO','hasDDO','hasSLO','hasACHO','hasEMO'].forEach(flag => {
       if (!fields[flag] && af[flag]) fields[flag] = true;
     });
     if (af.keyRisks?.length) fields.keyRisks = af.keyRisks;
     if (af.summary)           fields.summary  = af.summary;
+    // Supplement council name and lot ref if parsers didn't get them
+    if (!fields.councilName && af.councilName) fields.councilName = af.councilName;
+    if (!fields.lotRef && af.lotRef)           fields.lotRef      = af.lotRef;
   }
 
   const facts       = aiResult?.facts || [];
@@ -189,6 +215,15 @@ export const normalizeS32Result = (s32Result, aiResult) => {
       const w = parseFloat(s32Result.waterRatesAmt);
       if (!isNaN(w) && w > 0) fields.waterRates = w;
     }
+    // Services
+    if (s32Result.servicesElec)  fields.servicesElec  = s32Result.servicesElec;
+    if (s32Result.servicesGas)   fields.servicesGas   = s32Result.servicesGas;
+    if (s32Result.servicesWater) fields.servicesWater = s32Result.servicesWater;
+    if (s32Result.servicesSewer) fields.servicesSewer = s32Result.servicesSewer;
+    // Vendor name (display only — not dispatched to store, just shown in badge)
+    if (s32Result.vendorName)    fields._vendorName   = s32Result.vendorName;
+    // Planning permit
+    if (s32Result.hasPermit)     fields._permitNo     = s32Result.permitNo || 'Yes';
   }
 
   // Supplement from ai_adapter
@@ -296,13 +331,14 @@ export const extractAllFields = async (vpFile, s32File, fspFile, currentSiteStat
     try {
       let text = '';
       if (source.file instanceof File) {
-        const buffer     = await source.file.arrayBuffer();
-        const textExists = await hasTextLayer(buffer);
-        if (!textExists || source.file.type.startsWith('image/')) {
-          console.warn('[UnifiedEngine] No text layer in', source.file.name, '– triggering OCR…');
-          text = await performOCR(source.file);
-        } else {
-          text = await source.file.text();
+        // Use pdf_ocr.extractFileText() — handles PDFs via PDF.js (proper text layer),
+        // with automatic Tesseract OCR fallback for scanned/image pages.
+        // Replaces the previous source.file.text() which decoded raw PDF bytes as UTF-8
+        // (binary garbage, not the actual text content).
+        console.log('[UnifiedEngine] Extracting text from', source.file.name, '(', source.type, ')');
+        text = await extractFileText(source.file);
+        if (!text.trim()) {
+          console.warn('[UnifiedEngine] No text extracted from', source.file.name);
         }
       } else if (typeof source.file === 'string') {
         text = source.file;

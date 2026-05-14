@@ -1,28 +1,16 @@
 /**
  * @file domain/extraction/ai_adapter.js
  * @description Rule-based Victorian property document parser.
- * @version 4.0.0 - Complete extraction to current Australian planning standards.
- *
- * Improvements over v3:
- *  - Zone code extraction fixed: now captures full schedule numbers (GRZ1, NRZ2, etc.)
- *  - Overlay extraction enhanced: captures schedule numbers (HO295, DDO12, etc.)
- *  - Added overlay types: ESO, SLO, DDO, ACHO, EMO, ACZ, CDZ, IN3Z
- *  - S.173 details extraction improved
- *  - Covenant clause extraction expanded
- *  - Export is backwards-compatible: same {facts, fields, confidence} schema
+ * @version 4.1.0 - Section-aware ENCUMBRANCES extraction + expanded covenant patterns + dealing numbers.
  *
  * Zero external dependencies. Works fully offline, instantly, reliably.
  * Parses: VicPlan Certificates, Section 32 Vendor Statements, Survey Plans.
  */
 
 // ---------------------------------------------------------------------------
-// Zone code detection — ordered from most-specific to least-specific
+// Zone code detection
 // ---------------------------------------------------------------------------
 
-/**
- * Ordered list of full-name → shortcode mappings.
- * More specific names (longer strings) listed first to avoid partial matches.
- */
 const ZONE_NAME_MAP = [
   { rx: /Neighbourhood\s+Residential\s+Zone/i,       code: 'NRZ'  },
   { rx: /General\s+Residential\s+Zone/i,             code: 'GRZ'  },
@@ -40,128 +28,104 @@ const ZONE_NAME_MAP = [
   { rx: /Public\s+Park\s+and\s+Recreation\s+Zone/i,  code: 'PPRZ' },
   { rx: /Comprehensive\s+Development\s+Zone/i,       code: 'CDZ'  },
   { rx: /Rural\s+Activity\s+Zone/i,                  code: 'RAZ'  },
-  { rx: /Mixed\s+(?:Farming|Rural)\s+Zone/i,         code: 'FZ'   },
   { rx: /Farming\s+Zone/i,                           code: 'FZ'   },
   { rx: /Green\s+Wedge\s+Zone/i,                     code: 'GWZ'  },
 ];
 
-/** All shortcode patterns (for bare shortcode fallback only) */
 const ZONE_SHORTCODES = /\b(NRZ|GRZ|RGZ|LDRZ|MUZ|C1Z|C2Z|CAZ|ACZ|UAZ|IN1Z|IN2Z|IN3Z|PUZ|PPRZ|FZ|CDZ|GWZ|MDZ|RAZ)\b/i;
 
-/**
- * Extract zone code with schedule number from document text.
- * Priority: full code with digit > "Code - Schedule N" > code in parentheses >
- *           full name + nearby schedule > bare code
- *
- * @param {string} text
- * @returns {string|null}  e.g. 'GRZ1', 'NRZ2', 'C1Z', 'MUZ'
- */
 const extractZoneCode = (text) => {
-  // 1. Shortcode already has digit attached with optional space: GRZ1, NRZ 2, IN1Z3
-  //    Require a word boundary BEFORE and after the full match to avoid false positives.
   const directCode = text.match(
     /\b(NRZ|GRZ|RGZ|LDRZ|MUZ|C1Z|C2Z|CAZ|ACZ|UAZ|IN1Z|IN2Z|IN3Z|PUZ|PPRZ|FZ|CDZ|GWZ|MDZ|RAZ)\s*(\d+)\b/i
   );
   if (directCode) return directCode[1].toUpperCase() + directCode[2];
 
-  // 2. "Code - Schedule N" or "Code – Schedule N" (VicPlan certificate format)
   const scheduleCode = text.match(
     /\b(NRZ|GRZ|RGZ|LDRZ|MUZ|C1Z|C2Z|CAZ|ACZ|UAZ|IN1Z|IN2Z|IN3Z|PUZ|FZ|CDZ|GWZ|RAZ)\s*[-–]\s*Schedule\s+(\d+)/i
   );
   if (scheduleCode) return scheduleCode[1].toUpperCase() + scheduleCode[2];
 
-  // 3. Code in parentheses: "(GRZ1)" or "(GRZ 1)"  (VicPlan / SPEAR format)
   const codeInParen = text.match(
     /\(\s*(NRZ|GRZ|RGZ|LDRZ|MUZ|C1Z|C2Z|CAZ|ACZ|UAZ|IN1Z|IN2Z|IN3Z|PUZ|FZ|CDZ|GWZ|RAZ)\s*(\d+)?\s*\)/i
   );
   if (codeInParen) return (codeInParen[1] + (codeInParen[2] || '')).toUpperCase();
 
-  // 4. Full zone name → shortcode, then find nearby schedule number
   for (const { rx, code } of ZONE_NAME_MAP) {
     const m = text.match(rx);
     if (m) {
-      const idx = m.index;
-      // Look ±120 chars around the matched name
-      const window = text.slice(Math.max(0, idx - 20), idx + 140);
-      const sm = window.match(/[-–(]\s*Schedule\s+(\d+)/i)
-               || window.match(/Schedule\s+(\d+)/i)
-               || window.match(/[-–(]\s*(\d+)\s*[)-]/);
+      const win = text.slice(Math.max(0, m.index - 20), m.index + 140);
+      const sm = win.match(/[-–(]\s*Schedule\s+(\d+)/i)
+              || win.match(/Schedule\s+(\d+)/i)
+              || win.match(/[-–(]\s*(\d+)\s*[)-]/);
       return code + (sm ? sm[1] : '');
     }
   }
 
-  // 5. Last resort: bare shortcode with no schedule number
   const bare = text.match(ZONE_SHORTCODES);
   if (bare) return bare[1].toUpperCase();
-
   return null;
 };
 
 // ---------------------------------------------------------------------------
-// Overlay detection — returns {tag, field, scheduleNumber}
+// Overlay detection
 // ---------------------------------------------------------------------------
 
-/**
- * Extract overlay schedule number from the match context.
- * e.g. "Heritage Overlay 295" or "HO295" or "HO - Schedule 295"
- */
 const extractOverlaySchedule = (matchStr) => {
   const m = matchStr.match(/[-–\s]+Schedule\s+(\d+)/i)
           || matchStr.match(/\b([A-Z]+O)\s*(\d+)\b/i)
           || matchStr.match(/\b(\d{1,4})\b/);
   if (!m) return '';
-  // Make sure we got the number group
   const num = m[2] || m[1];
   return /^\d+$/.test(num) ? num : '';
 };
 
 const OVERLAY_DEFS = [
-  {
-    re: /Heritage\s+Overlay\s*(\d+)?|Heritage\s+Precinct|\bHO\s*(\d+)?\b/i,
-    tag: 'HO', field: 'hasHO',
-    label: (n) => 'Heritage Overlay' + (n ? ` (HO${n})` : ' (HO)'),
-  },
-  {
-    re: /Vegetation\s+Protection\s+Overlay\s*(\d+)?|\bVPO\s*(\d+)?\b/i,
-    tag: 'VPO', field: 'hasVPO',
-    label: (n) => 'Vegetation Protection Overlay' + (n ? ` (VPO${n})` : ' (VPO)'),
-  },
-  {
-    re: /Special\s+Building\s+Overlay\s*(\d+)?|Land\s+Subject\s+to\s+Inundation|\bSBO\s*(\d+)?\b|\bLSIO\s*(\d+)?\b/i,
-    tag: 'SBO', field: 'hasSBO',
-    label: (n) => 'Flood Risk Overlay' + (n ? ` (SBO${n})` : ' (SBO/LSIO)'),
-  },
-  {
-    re: /Bushfire\s+Management\s+Overlay\s*(\d+)?|\bBMO\s*(\d+)?\b/i,
-    tag: 'BMO', field: 'hasBMO',
-    label: (n) => 'Bushfire Management Overlay' + (n ? ` (BMO${n})` : ' (BMO)'),
-  },
-  {
-    re: /Environmental\s+Significance\s+Overlay\s*(\d+)?|\bESO\s*(\d+)?\b/i,
-    tag: 'ESO', field: 'hasESO',
-    label: (n) => 'Environmental Significance Overlay' + (n ? ` (ESO${n})` : ' (ESO)'),
-  },
-  {
-    re: /Design\s+and\s+Development\s+Overlay\s*(\d+)?|\bDDO\s*(\d+)?\b/i,
-    tag: 'DDO', field: 'hasDDO',
-    label: (n) => 'Design & Development Overlay' + (n ? ` (DDO${n})` : ' (DDO)'),
-  },
-  {
-    re: /Significant\s+Landscape\s+Overlay\s*(\d+)?|\bSLO\s*(\d+)?\b/i,
-    tag: 'SLO', field: 'hasSLO',
-    label: (n) => 'Significant Landscape Overlay' + (n ? ` (SLO${n})` : ' (SLO)'),
-  },
-  {
-    re: /Aboriginal\s+Cultural\s+Heritage\s+Overlay|\bACHO\b/i,
-    tag: 'ACHO', field: 'hasACHO',
-    label: () => 'Aboriginal Cultural Heritage Overlay (ACHO)',
-  },
-  {
-    re: /Erosion\s+Management\s+Overlay|Geotechnical\s+Overlay|\bEMO\s*(\d+)?\b/i,
-    tag: 'EMO', field: 'hasEMO',
-    label: (n) => 'Erosion Management Overlay' + (n ? ` (EMO${n})` : ' (EMO)'),
-  },
+  { re: /Heritage\s+Overlay\s*(\d+)?|Heritage\s+Precinct|\bHO\s*(\d+)?\b/i,
+    tag: 'HO', field: 'hasHO', label: (n) => 'Heritage Overlay' + (n ? ' (HO' + n + ')' : ' (HO)') },
+  { re: /Vegetation\s+Protection\s+Overlay\s*(\d+)?|\bVPO\s*(\d+)?\b/i,
+    tag: 'VPO', field: 'hasVPO', label: (n) => 'Vegetation Protection Overlay' + (n ? ' (VPO' + n + ')' : ' (VPO)') },
+  { re: /Special\s+Building\s+Overlay\s*(\d+)?|Land\s+Subject\s+to\s+Inundation|\bSBO\s*(\d+)?\b|\bLSIO\s*(\d+)?\b/i,
+    tag: 'SBO', field: 'hasSBO', label: (n) => 'Flood Risk Overlay' + (n ? ' (SBO' + n + ')' : ' (SBO/LSIO)') },
+  { re: /Bushfire\s+Management\s+Overlay\s*(\d+)?|\bBMO\s*(\d+)?\b/i,
+    tag: 'BMO', field: 'hasBMO', label: (n) => 'Bushfire Management Overlay' + (n ? ' (BMO' + n + ')' : ' (BMO)') },
+  { re: /Environmental\s+Significance\s+Overlay\s*(\d+)?|\bESO\s*(\d+)?\b/i,
+    tag: 'ESO', field: 'hasESO', label: (n) => 'Environmental Significance Overlay' + (n ? ' (ESO' + n + ')' : ' (ESO)') },
+  { re: /Design\s+and\s+Development\s+Overlay\s*(\d+)?|\bDDO\s*(\d+)?\b/i,
+    tag: 'DDO', field: 'hasDDO', label: (n) => 'Design & Development Overlay' + (n ? ' (DDO' + n + ')' : ' (DDO)') },
+  { re: /Significant\s+Landscape\s+Overlay\s*(\d+)?|\bSLO\s*(\d+)?\b/i,
+    tag: 'SLO', field: 'hasSLO', label: (n) => 'Significant Landscape Overlay' + (n ? ' (SLO' + n + ')' : ' (SLO)') },
+  { re: /Aboriginal\s+Cultural\s+Heritage\s+Overlay|\bACHO\b/i,
+    tag: 'ACHO', field: 'hasACHO', label: () => 'Aboriginal Cultural Heritage Overlay (ACHO)' },
+  { re: /Erosion\s+Management\s+Overlay|Geotechnical\s+Overlay|\bEMO\s*(\d+)?\b/i,
+    tag: 'EMO', field: 'hasEMO', label: (n) => 'Erosion Management Overlay' + (n ? ' (EMO' + n + ')' : ' (EMO)') },
 ];
+
+// ---------------------------------------------------------------------------
+// Section-aware encumbrances extraction
+// ---------------------------------------------------------------------------
+
+const extractEncumbrancesSection = (text) => {
+  const headingRx = /ENCUMBRANCES?,?\s*CAVEATS?\s+AND\s+NOTICES?|ENCUMBRANCES?\s+ON\s+TITLE|CAVEATS?\s+AND\s+ENCUMBRANCES?|REGISTERED\s+ENCUMBRANCES?/i;
+  const match = text.match(headingRx);
+  if (!match) return '';
+  const start = match.index + match[0].length;
+  const tail = text.slice(start, start + 3500);
+  const stopRx = /\n[A-Z][A-Z\s,&]{8,}\n|\n\s*\d+\.\s+[A-Z]{3}/;
+  const stopMatch = tail.match(stopRx);
+  return stopMatch ? tail.slice(0, stopMatch.index) : tail;
+};
+
+// ---------------------------------------------------------------------------
+// Dealing number extraction
+// ---------------------------------------------------------------------------
+
+const extractDealingNumbers = (text) => {
+  const matches = [];
+  let m;
+  const rx = /\b([DATRK][0-9]{5,8}|A[LTKFR][0-9]{5,8})\b/gi;
+  while ((m = rx.exec(text)) !== null) matches.push(m[1]);
+  return [...new Set(matches)];
+};
 
 // ---------------------------------------------------------------------------
 // Covenant patterns
@@ -169,7 +133,7 @@ const OVERLAY_DEFS = [
 
 const COVENANT_PATTERNS = [
   {
-    re: /one\s+(?:private\s+)?dwelling\s+only|single\s+dwelling\s+covenant|one\s+house\s+only|no\s+more\s+than\s+one\s+dwelling|restricted\s+to\s+one\s+(?:private\s+)?dwelling/i,
+    re: /one\s+(?:private\s+)?dwelling\s+only|single\s+dwelling\s+covenant|one\s+house\s+only|no\s+more\s+than\s+one\s+(?:private\s+)?dwelling|restricted\s+to\s+one\s+(?:private\s+)?dwelling|erect\s+one\s+(?:private\s+)?dwelling\s+house\s+only|shall\s+not\s+erect\s+any\s+building\s+other\s+than\s+a\s+(?:private\s+)?dwelling|not\s+to\s+erect\s+more\s+than\s+one\s+dwelling|one\s+residential\s+dwelling\s+only|limited\s+to\s+(?:a\s+)?single\s+(?:private\s+)?dwelling/i,
     tag: 'SINGLE_DWELLING_COVENANT', field: 'hasSingleCovenant',
   },
   {
@@ -183,18 +147,16 @@ const COVENANT_PATTERNS = [
 // ---------------------------------------------------------------------------
 
 const EASEMENT_PATTERNS = [
-  { re: /\beasement\b.*?(drainage|sewerage|sewer|storm\s*water|water|gas|electricity|service|access|right\s+of\s+carriageway)/i },
-  { re: /(drainage|sewerage|sewer|storm\s*water).*?\beasement\b/i },
+  { re: /\beasement\b.*?(?:drainage|sewerage|sewer|stormwater|water|gas|electricity|service|access|carriageway)/i },
+  { re: /(?:drainage|sewerage|sewer|stormwater).*?\beasement\b/i },
   { re: /right\s+of\s+way\b|right\s+of\s+carriageway/i },
   { re: /build\s+over\s+easement|\bBOE\b/i },
 ];
 
-/** Extract easement width in metres from surrounding text */
 const extractEasementDetails = (text) => {
-  const widthM  = text.match(/(\d+(?:\.\d+)?)\s*m(?:etre|eter)?s?\b.*?easement/i)
-                || text.match(/easement.*?(\d+(?:\.\d+)?)\s*m(?:etre|eter)?s?\b/i);
+  const widthM = text.match(/(\d+(?:\.\d+)?)\s*m(?:etre|eter)?s?\b.*?easement/i)
+              || text.match(/easement.*?(\d+(?:\.\d+)?)\s*m(?:etre|eter)?s?\b/i);
   if (widthM) return widthM[1] + 'm easement detected in document';
-  // Links conversion (old survey plans)
   const links = text.match(/(\d+(?:\.\d+)?)\s*links?\s+(?:wide\s+)?easement/i);
   if (links) return (parseFloat(links[1]) * 0.201168).toFixed(2) + 'm easement (converted from links)';
   return 'Easement detected in document';
@@ -234,13 +196,6 @@ const MORTGAGE_PATTERNS = [
 // Main export
 // ---------------------------------------------------------------------------
 
-/**
- * Parses a Victorian property document using deterministic pattern matching.
- * Returns { facts, fields, confidence }.
- *
- * @param {string} text  - Raw document text
- * @returns {Promise<{facts: string[], fields: Object, confidence: number}>}
- */
 export const parseDocumentWithAI = async (text) => {
   if (!text || !text.trim()) {
     throw new Error('No document text provided for analysis.');
@@ -248,74 +203,69 @@ export const parseDocumentWithAI = async (text) => {
 
   const facts  = [];
   const fields = {
-    // Zone
-    zoneCode:              null,
-    // Overlays
-    hasHO:                 false,
-    hasVPO:                false,
-    hasSBO:                false,
-    hasBMO:                false,
-    hasESO:                false,
-    hasDDO:                false,
-    hasSLO:                false,
-    hasACHO:               false,
-    hasEMO:                false,
-    overlayLabels:         [],       // e.g. ["Heritage Overlay (HO295)", "DDO12"]
-    // Constraints
-    hasSingleCovenant:     false,
+    zoneCode:                 null,
+    hasHO: false, hasVPO: false, hasSBO: false, hasBMO: false,
+    hasESO: false, hasDDO: false, hasSLO: false, hasACHO: false, hasEMO: false,
+    overlayLabels:            [],
+    hasSingleCovenant:        false,
     hasNoSubdivisionCovenant: false,
-    hasEasement:           false,
-    easementDetails:       null,
-    hasS173Agreement:      false,
-    s173Details:           null,
-    covenantDetails:       null,
-    hasMortgage:           false,
-    // Analysis
-    keyRisks:              [],
-    summary:               null,
+    hasEasement:              false,
+    easementDetails:          null,
+    hasS173Agreement:         false,
+    s173Details:              null,
+    covenantDetails:          null,
+    dealingNumbers:           [],
+    encumbranceSectionText:   null,
+    hasMortgage:              false,
+    keyRisks:                 [],
+    summary:                  null,
   };
 
-  // 1 — Zone code (with schedule number)
+  // 0 — Extract encumbrances section for section-aware searching
+  const encText = extractEncumbrancesSection(text);
+  if (encText) fields.encumbranceSectionText = encText.trim().slice(0, 500);
+  const corpus = encText || text;
+
+  fields.dealingNumbers = extractDealingNumbers(corpus);
+
+  // 1 — Zone code (full doc — zones appear in planning certificate section)
   fields.zoneCode = extractZoneCode(text);
 
-  // 2 — Overlays (with schedule numbers)
+  // 2 — Overlays (full doc)
   OVERLAY_DEFS.forEach(({ re, tag, field, label }) => {
     const m = text.match(re);
     if (m) {
       facts.push(tag);
       fields[field] = true;
-      const schedNum = extractOverlaySchedule(m[0]);
-      fields.overlayLabels.push(label(schedNum));
+      fields.overlayLabels.push(label(extractOverlaySchedule(m[0])));
     }
   });
 
-  // 3 — Covenants
+  // 3 — Covenants (encumbrances corpus first, fallback to full doc)
   COVENANT_PATTERNS.forEach(({ re, tag, field }) => {
-    const m = text.match(re);
+    const m = corpus.match(re) || text.match(re);
     if (m) {
       facts.push(tag);
       fields[field] = true;
-      if (field === 'hasSingleCovenant') {
-        fields.covenantDetails = m[0].slice(0, 100);
-      }
+      if (field === 'hasSingleCovenant') fields.covenantDetails = m[0].trim().slice(0, 120);
     }
   });
 
-  // 4 — Easements
+  // 4 — Easements (corpus first)
   let easementFound = false;
   EASEMENT_PATTERNS.forEach(({ re }) => {
-    if (!easementFound && re.test(text)) {
+    if (!easementFound && (re.test(corpus) || re.test(text))) {
       facts.push('EASEMENT');
       fields.hasEasement = true;
-      fields.easementDetails = extractEasementDetails(text);
+      fields.easementDetails = extractEasementDetails(corpus || text);
       easementFound = true;
     }
   });
 
-  // 5 — S.173 Agreements
+  // 5 — S.173 Agreements (corpus first)
   let s173Found = false;
   S173_PATTERNS.forEach(({ re, tag }) => {
-    if (re.test(text)) {
+    if (re.test(corpus) || re.test(text)) {
       s173Found = true;
       if (tag !== 'S173_BASE') facts.push(tag);
     }
@@ -323,48 +273,43 @@ export const parseDocumentWithAI = async (text) => {
   if (s173Found) {
     fields.hasS173Agreement = true;
     if (!facts.some(f => f.startsWith('S173_'))) facts.push('S173_SINGLE_DWELLING');
-    const s173Match = text.match(/s(?:ection)?\.?\s*173[^.]{0,200}/i);
-    fields.s173Details = s173Match
-      ? s173Match[0].trim().slice(0, 160)
-      : 'Section 173 agreement registered on title.';
+    const s173Match = (corpus || text).match(/s(?:ection)?\.?\s*173[^.]{0,200}/i);
+    fields.s173Details = s173Match ? s173Match[0].trim().slice(0, 160) : 'Section 173 agreement registered on title.';
   }
 
-  // 6 — Large trees / TPZ
+  // 6 — Trees / TPZ (full doc)
   TREE_PATTERNS.forEach(({ re, tag }) => { if (re.test(text)) facts.push(tag); });
 
-  // 7 — Mortgage / charge
-  MORTGAGE_PATTERNS.forEach(({ re, field }) => { if (re.test(text)) fields[field] = true; });
+  // 7 — Mortgage / charge / caveat (corpus first)
+  MORTGAGE_PATTERNS.forEach(({ re, field }) => {
+    if (re.test(corpus) || re.test(text)) fields[field] = true;
+  });
 
   // 8 — Key risks summary
   const risks = [];
-  if (fields.hasSingleCovenant)    risks.push('Single dwelling covenant restricts development');
-  if (fields.hasHO)                risks.push('Heritage Overlay — demolition/alterations permit required');
-  if (fields.hasSBO)               risks.push('Flood overlay — hydrology / BOE report needed');
-  if (fields.hasBMO)               risks.push('Bushfire overlay — BAL rating required');
-  if (fields.hasDDO)               risks.push('Design & Development Overlay — design response required');
-  if (fields.hasS173Agreement)     risks.push('Section 173 agreement on title');
-  if (fields.hasEasement)          risks.push('Easement detected — check for build-over easement (BOE) implications');
-  if (fields.hasMortgage)          risks.push('Mortgage/charge registered — confirm discharge pre-settlement');
+  if (fields.hasSingleCovenant)  risks.push('Single dwelling covenant restricts development');
+  if (fields.hasHO)              risks.push('Heritage Overlay — demolition/alterations permit required');
+  if (fields.hasSBO)             risks.push('Flood overlay — hydrology / BOE report needed');
+  if (fields.hasBMO)             risks.push('Bushfire overlay — BAL rating required');
+  if (fields.hasDDO)             risks.push('Design & Development Overlay — design response required');
+  if (fields.hasS173Agreement)   risks.push('Section 173 agreement on title');
+  if (fields.hasEasement)        risks.push('Easement detected — check for build-over easement (BOE) implications');
+  if (fields.hasMortgage)        risks.push('Mortgage/charge registered — confirm discharge pre-settlement');
   fields.keyRisks = risks;
 
-  // 9 — Auto-generate summary
-  const zoneStr = fields.zoneCode ? `Zone: ${fields.zoneCode}. ` : '';
+  // 9 — Summary
+  const zoneStr    = fields.zoneCode ? 'Zone: ' + fields.zoneCode + '. ' : '';
   const overlayStr = fields.overlayLabels.length
     ? fields.overlayLabels.join(', ') + ' apply. '
     : 'No planning overlays detected. ';
-  fields.summary = zoneStr + overlayStr +
-    (risks.length
-      ? `${risks.length} risk factor(s): ${risks.join('; ')}.`
-      : 'No significant encumbrances detected.');
+  fields.summary   = zoneStr + overlayStr +
+    (risks.length ? risks.length + ' risk factor(s): ' + risks.join('; ') + '.' : 'No significant encumbrances detected.');
 
-  // Confidence (based on how many patterns matched)
-  const hitCount = facts.length + (fields.zoneCode ? 2 : 0);
+  const hitCount   = facts.length + (fields.zoneCode ? 2 : 0);
   const confidence = Math.min(95, 55 + hitCount * 8);
 
   return { facts: [...new Set(facts)], fields, confidence };
 };
 
-export default parseDocumentWithAI;
-
-// Kept for compatibility — no longer uses any LLM
-export const PARSING_SYSTEM_PROMPT = '/* Rule-based parser v4.0.0 — no LLM required */';
+// parseDocumentWithAI is already exported as `export const` above (named export, no default).
+export const PARSING_SYSTEM_PROMPT = '/* Rule-based parser v4.1.0 — no LLM required */';

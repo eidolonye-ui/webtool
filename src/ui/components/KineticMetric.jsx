@@ -18,11 +18,11 @@ import { C, T, MONO } from '../../core/config/theme_v3.js';
  * @param {boolean} isCritical - If true, triggers a red-tinted pulse when the value changes.
  * @param {string} className - Optional CSS class.
  */
-const KineticMetric = ({ 
-  value = 0, 
-  prefix = '', 
-  suffix = '', 
-  decimals = 0, 
+export const KineticMetric = ({
+  value = 0,
+  prefix = '',
+  suffix = '',
+  decimals = 0,
   isCritical = false,
   className = ''
 }) => {
@@ -102,4 +102,4 @@ const KineticMetric = ({
   );
 };
 
-export default KineticMetric;
+// Named export only — no default export (coding standard: No Default Exports)

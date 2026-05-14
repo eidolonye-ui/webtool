@@ -60,7 +60,7 @@ export const calculateQualitySignals = (state) => {
 
   let planScore = 0;
   const planSources = [];
-  if (plan.zone) { planScore += 30; planSources.push("Zone set"); }
+  if (plan.zoneCode || plan.zone) { planScore += 30; planSources.push("Zone set"); }
   if (lookupResult?.lat) { planScore += 20; planSources.push("Address geocoded"); }
   if (plan.overlayReviewed) { planScore += 20; planSources.push("Overlays confirmed"); }
 

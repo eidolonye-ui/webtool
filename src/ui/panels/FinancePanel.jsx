@@ -264,7 +264,7 @@ export const FinancePanel = () => {
               )}
             </div>
 
-            {/* Contingency */}
+            {/* Contingency + Duration */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: T.sp.md }}>
               <div>
                 <UIInput
@@ -279,6 +279,19 @@ export const FinancePanel = () => {
                 value={projectMonths}
                 onChange={(v) => setFin('projectMonths', parseInt(v) || 24)}
               />
+            </div>
+
+            {/* Target Margin — drives investment decision in Sovereign Memo */}
+            <div>
+              <UIInput
+                label="Target Development Margin (%)"
+                value={finance.targetMargin ?? 20}
+                onChange={(v) => setFin('targetMargin', parseFloat(v) || 20)}
+                placeholder="20"
+              />
+              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>
+                Hurdle rate for PROCEED/RENEGOTIATE decision in Executive Memo
+              </div>
             </div>
           </div>
 

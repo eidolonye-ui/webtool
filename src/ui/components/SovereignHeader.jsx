@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { C, SANS, T } from '../../core/config/theme_v3.js';
 import { store } from '../../core/store/store.js';
-import KineticMetric from '../components/KineticMetric.jsx';
+import { KineticMetric } from '../components/KineticMetric.jsx';
 import { PersonaPill, PERSONAS } from './PersonaPill.jsx';
 import { ScenarioManager } from './ScenarioManager.jsx';
 

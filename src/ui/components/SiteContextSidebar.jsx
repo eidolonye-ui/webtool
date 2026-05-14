@@ -254,16 +254,17 @@ export const SiteContextSidebar = () => {
   // -------------------------------------------------------------------------
   return (
     <div style={{
-      width: '280px',
+      width: '100%',                  // fill the aside column — not a fixed 280px that fights padding
+      boxSizing: 'border-box',        // padding included in width — eliminates X overflow
       height: 'calc(100vh - 120px)',
       position: 'sticky',
       top: '60px',
       display: 'flex',
       flexDirection: 'column',
       gap: T.sp.md,
-      paddingRight: T.sp.md,
+      padding: '0 ' + T.sp.md + 'px 0 0',
       overflowY: 'auto',
-      borderRight: '1px solid ' + C.surface.border
+      overflowX: 'hidden',
     }}>
 
       {/* ------------------------------------------------------------------ */}
@@ -321,13 +322,13 @@ export const SiteContextSidebar = () => {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            color: C.text ? C.text.secondary : '#888',
+            color: C.text.secondary,
             fontSize: T.fs.xs,
             textAlign: 'center',
             padding: T.sp.md
           }}>
             <div style={{ fontSize: '28px', marginBottom: 10 }}>MAP</div>
-            <div style={{ fontWeight: 800, color: C.text ? C.text.primary : '#fff', fontSize: T.fs.xs, textTransform: 'uppercase' }}>
+            <div style={{ fontWeight: 800, color: C.text.primary, fontSize: T.fs.xs, textTransform: 'uppercase' }}>
               Geospatial Viewport
             </div>
             <div style={{ opacity: 0.5, marginTop: 6, lineHeight: 1.5, maxWidth: '160px', fontSize: 10 }}>

@@ -6,6 +6,7 @@
  */
 
 import { calculateCapitalizedInterest, distributeCostsOverTime } from './cashflow_engine.js';
+import { safeRound, safeNum, guardObj } from '../../core/utils/num_guard.js';
 
 /**
  * [DOMAIN_CONSTANTS] - Consolidated Financial & Risk Parameters
@@ -113,7 +114,7 @@ export function calculateProjectFinances({
 
   /* Dynamic Contingency */
   const baseContPct = (parseNum(fin.contingencyPct) || 5) / 100;
-  const riskScorePenalty = (100 - (calcFeasScore(0, 0, plan.zone, 0) || 0)) * 0.001;
+  const riskScorePenalty = (100 - (calcFeasScore(0, 0, plan.zoneCode || plan.zone, 0) || 0)) * 0.001;
   const effectiveContPct = baseContPct + riskScorePenalty;
   const contingencyAmt = parseNum(fin.contingency) > 0 ? parseNum(fin.contingency) : Math.round(baseHard * effectiveContPct);
 
@@ -145,12 +146,24 @@ export function calculateProjectFinances({
   const profit = grv - total;
   const margin = total > 0 ? (profit / total) * 100 : 0;
 
-  return {
-    land, soft: baseSoft, hard: hardFinal, hold, sale, total, grv, profit, margin,
+  // Guard entire output: any NaN/Infinity in the chain (e.g. zero land × undefined rate)
+  // must not reach the UI or store as a corrupted number.
+  const raw = {
+    land, soft: baseSoft, hard: hardFinal, hold, sale, total, grv, profit,
     contingencyAmt, escalationAmt, sitePrep,
     slopePS, rockPS, soilPS, balPS, powerLinePS, drainageSinkPS, parkingPS,
-    effectiveContPct, launderS: land, totalHard: hardFinal,
-    capInterest,
-    drawdownSchedule: distributeCostsOverTime(hardFinal - escalationAmt, projectMonths)
+    totalHard: hardFinal, capInterest,
+  };
+  const safe = guardObj(raw);  // replaces any NaN/Infinity with 0
+
+  // margin is a percentage — compute from safe values so it can't be NaN
+  const safeMargin = safe.total > 0 ? safeNum((safe.profit / safe.total) * 100) : 0;
+
+  return {
+    ...safe,
+    margin: safeMargin,
+    effectiveContPct: safeNum(effectiveContPct),
+    launderS: safe.land,
+    drawdownSchedule: distributeCostsOverTime(hardFinal - escalationAmt, projectMonths),
   };
 }

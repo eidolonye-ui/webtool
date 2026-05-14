@@ -2,7 +2,7 @@
  * @file domain/finance/irr_engine.js
  * @description Monthly cash flow generation and IRR calculation using Newton-Raphson.
  * Integrates with cashflow_engine for industrial S-Curve distribution.
- * @version 2.0.0
+ * @version 2.1.0 - Fixed truncation at buildIRRCashFlows body.
  */
 
 import { distributeCostsOverTime } from './cashflow_engine.js';
@@ -14,7 +14,7 @@ import { distributeCostsOverTime } from './cashflow_engine.js';
  */
 export const calcTrueIRR = (cashFlows, maxIter = 60, tol = 1e-8) => {
   if (!cashFlows || cashFlows.length < 2) return null;
-  
+
   let r = 0.01; // starting guess: 1%/month
   for (let iter = 0; iter < maxIter; iter++) {
     let npv = 0;
@@ -23,7 +23,7 @@ export const calcTrueIRR = (cashFlows, maxIter = 60, tol = 1e-8) => {
       const cf = cashFlows[t];
       if (!cf) continue;
       const disc = Math.pow(1 + r, t);
-      npv += cf / disc;
+      npv  += cf / disc;
       dnpv -= (t * cf) / (disc * (1 + r));
     }
     if (Math.abs(dnpv) < 1e-10) break;
@@ -35,12 +35,23 @@ export const calcTrueIRR = (cashFlows, maxIter = 60, tol = 1e-8) => {
     r = Math.max(-0.99, Math.min(0.99, nr));
   }
   if (r <= -1 || isNaN(r)) return null;
-  return (Math.pow(1 + r, 12) - 1) * 100; // annualise
+  const annualIRR = (Math.pow(1 + r, 12) - 1) * 100;
+  return Number.isFinite(annualIRR) ? annualIRR : null;
 };
 
 /**
  * Build professional monthly cash flows for IRR calc.
- * Replaces legacy Cosine-S-Curve with industrial Sigmoid-S-Curve.
+ * Uses industrial Sigmoid S-Curve for construction drawdowns.
+ *
+ * @param {number} land          - Total land acquisition cost (price + stamp duty)
+ * @param {number} soft          - Soft costs (legal, contingency, planning fees)
+ * @param {number} hard          - Hard costs (construction + site works)
+ * @param {number} grv           - Gross Realisation Value (total sale proceeds)
+ * @param {number} lvrPct        - Loan-to-Value Ratio, e.g. 65 = 65%
+ * @param {number} projectMonths - Total project duration in months
+ * @param {number} delayMonths   - Settlement delay after practical completion
+ * @param {number} interestRate  - Annual interest rate, e.g. 6.5 = 6.5%
+ * @returns {number[]} Monthly cash flows array (negative = outflow, positive = inflow)
  */
 export const buildIRRCashFlows = (
   land,
@@ -52,62 +63,60 @@ export const buildIRRCashFlows = (
   delayMonths = 0,
   interestRate = 8.5
 ) => {
-  const lv = lvrPct / 100;
-  const pm = Math.max(6, Math.round(projectMonths));
-  const planM = Math.max(4, Math.round(pm * 0.47));
-  const buildM = pm - planM;
-  const saleM = 4;
-  const settleStart = pm + delayMonths;
-  const totalM = settleStart + saleM;
-  const monthlyRate = (interestRate / 100) / 12;
+  const lv           = lvrPct / 100;
+  const pm           = Math.max(6, Math.round(projectMonths));
+  const planM        = Math.max(4, Math.round(pm * 0.47));
+  const buildM       = pm - planM;
+  const saleM        = 4;
+  const settleStart  = pm + delayMonths;
+  const totalM       = settleStart + saleM;
+  const monthlyRate  = (interestRate / 100) / 12;
 
-  // 1. Distribute Hard Costs using S-Curve
-  const hardCostDistribution = distributeCostsOverTime(hard, buildM);
-  
+  // Distribute hard costs via S-Curve over construction phase
+  const hardDist = distributeCostsOverTime(hard, buildM);
+
   const flows = Array(totalM + 1).fill(0);
-  let cumulativeLoanBalance = 0;
+  let loanBalance = 0;
 
   for (let m = 0; m <= totalM; m++) {
-    let eq = 0; // Equity outflow
-    let db = 0;  // Debt outflow/drawdown
-    let proc = 0; // Proceeds inflow
+    let eq   = 0;  // equity outflow this month
+    let db   = 0;  // debt drawdown this month
+    let proc = 0;  // sale proceeds this month
 
     // Month 0: Land Acquisition
     if (m === 0) {
-      eq += land * (1 - lv);
-      db += land * lv;
-      cumulativeLoanBalance += land * lv;
+      eq          += land * (1 - lv);
+      db          += land * lv;
+      loanBalance += land * lv;
     }
 
-    // Planning Phase: Soft costs distributed linearly
+    // Planning Phase (months 1..planM): Soft costs linear
     if (m >= 1 && m <= planM && soft > 0) {
       const monthlySoft = soft / planM;
-      eq += monthlySoft * (1 - lv);
-      db += monthlySoft * lv;
-      cumulativeLoanBalance += monthlySoft * lv;
+      eq          += monthlySoft * (1 - lv);
+      db          += monthlySoft * lv;
+      loanBalance += monthlySoft * lv;
     }
 
-    // Construction Phase: Hard costs distributed via S-Curve
+    // Construction Phase (months planM..pm-1): Hard costs via S-Curve
     if (m >= planM && m < pm && hard > 0) {
-      const monthIdx = m - planM;
-      const draw = hardCostDistribution[monthIdx] || { amount: 0 };
-      
-      eq += draw.amount * (1 - lv);
-      db += draw.amount * lv;
-      cumulativeLoanBalance += draw.amount * lv;
+      const idx   = m - planM;
+      const draw  = (hardDist[idx] && hardDist[idx].amount) || 0;
+      eq          += draw * (1 - lv);
+      db          += draw * lv;
+      loanBalance += draw * lv;
     }
 
-    // Interest Calculation: Applied to cumulative loan balance
-    const interestExpense = cumulativeLoanBalance * monthlyRate;
-    db += interestExpense; // Interest is typically capitalized (added to loan)
-    cumulativeLoanBalance += interestExpense;
+    // Capitalised interest on outstanding loan balance
+    const interest = loanBalance * monthlyRate;
+    db          += interest;
+    loanBalance += interest;
 
-    // Exit Phase: GRV proceeds
+    // Exit Phase: GRV proceeds spread over saleM months after settlement start
     if (m > settleStart && m <= totalM && grv > 0) {
       proc += grv / saleM;
     }
 
-    // Final Cash Flow: Inflow - Outflow
     flows[m] = proc - eq - db;
   }
 

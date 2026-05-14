@@ -2,7 +2,9 @@
  * @file core/config/theme_v3.js
  * @description AI-Native Design System for WebTool (Sovereign Edition).
  * Inspired by Cursor's high-precision, deep-dark aesthetic.
- * @version 4.1.0 - Font scale +1-2px across hierarchy
+ * @version 4.2.0 - Fix: removed duplicate 'brand'/'text' keys that silently
+ *                  overwrote nested objects (C.brand.main / C.text.secondary
+ *                  were resolving to undefined across the entire UI).
  */
 
 export const C = {
@@ -43,12 +45,17 @@ export const C = {
     inverse: '#0B0B0B',       // For light-on-dark components
   },
 
-  // Legacy mapping for backward compatibility
-  brand: '#007AFF',
-  brandLight: '#3A86FF',
-  border: 'rgba(255,255,255,0.08)',
-  text: '#FFFFFF',
+  // ── Flat aliases (non-conflicting legacy keys) ──────────────────────
+  // NOTE: 'brand' and 'text' are intentionally NOT repeated here because
+  // duplicate keys in an object literal silently overwrite the earlier value
+  // in JavaScript — the nested objects above would be lost.
+  // Use C.brand.main or C.brand.light, and C.text.primary / C.text.secondary.
+  brandLight:    '#3A86FF',
+  border:        'rgba(255,255,255,0.08)',
   textSecondary: 'rgba(255,255,255,0.7)',
+
+  // Dark-on-light ink alias (used by ComparisonPanel light-table headers)
+  ink: '#1e293b',
 };
 
 // Typography - Inter is the gold standard for AI-Native UI

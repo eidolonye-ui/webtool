@@ -15,7 +15,8 @@ export const runDataSync = async () => {
   if (!newData) throw new Error("Fetch failed");
 
   // 2. Sanity Check
-  const currentRate = store.getState().finance.marketRate;
+  // Rate lives inside the active scenario's financing object, not at top-level finance
+  const currentRate = store.getActiveScenario()?.financing?.interestRate ?? null;
   const sanity = validateRateUpdate(currentRate, newData.rate);
   
   if (!sanity.valid) {
@@ -33,9 +34,9 @@ export const runDataSync = async () => {
     return { status: 'ROLLBACK', reason: 'Regression failure' };
   }
 
-  // 4. Atomic Update
-  store.dispatch('finance/setMarketRate', newData.rate);
-  console.log(`[DataSync] SUCCESS: Market Rate updated to ${newData.rate} (${newData.updatedAt})`);
+  // 4. Atomic Update — use dot-path dispatch into the active scenario's financing
+  store.dispatch('financing.interestRate', newData.rate);
+  console.log(`[DataSync] SUCCESS: Interest rate updated to ${newData.rate}% (${newData.updatedAt})`);
   
   return { status: 'UPDATED', value: newData.rate };
 };

@@ -23,39 +23,42 @@ export const SovereignMemoPanel = () => {
     return unsub;
   }, []);
 
-  const site       = scenario?.site || {};
-  const fin        = scenario?.finance || {};
-  const params     = scenario?.params || {};
-  const synthesis  = scenario?.site?.investigation?.synthesis;
-  const fatalRisks = synthesis?.fatalRisks || [];
+  const site         = scenario?.site || {};
+  const fin          = scenario?.finance || {};
+  const synthesis    = scenario?.site?.investigation?.synthesis;
+  const fatalRisks   = synthesis?.fatalRisks || [];
   const activeAlerts = synthesis?.activeAlerts || [];
   const accentColor  = state?.system?.activeAccentColor || '#0f4c75';
 
   // SOVEREIGN DATA ACTIVATION: Compute live financial results for the memo
-  const liveResults = computeLiveSnapshot(state).results || {};
-  const calc = liveResults;
+  const liveSnapshot = computeLiveSnapshot();
+  const liveResults  = liveSnapshot.results || {};
+  const calc         = liveResults;
+
+  // Target margin: user-configured in Finance Panel, default 20%
+  const targetMargin = Number(fin.targetMargin) || 20;
+
+  // Deterministic project ID: scenario name + date portion (no Math.random())
+  const projectId = (state?.system?.activeScenarioId || 'DEFAULT')
+    .toUpperCase().replace(/[^A-Z0-9]/g, '')
+    .slice(0, 6)
+    .padEnd(6, '0') + '-' + new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
   const handlePrint = () => {
     window.print();
   };
 
+  // Trust label: driven by decisionWaterfall step type (alignment map removed — never existed in store)
   const getTrustLabel = (step) => {
-    if (!synthesis?.alignment) return '';
-    const matched = Object.entries(synthesis.alignment).find(([k, v]) => 
-      step.conclusion.toLowerCase().includes(v.label.toLowerCase())
-    );
-    if (!matched) return '';
-    const status = matched[1].status;
     const labels = {
-      VERIFIED: { text: 'VERIFIED', color: C.semantic.success, bg: 'rgba(46, 204, 113, 0.1)' },
-      EXTRACTED: { text: 'EXTRACTED', color: C.semantic.info, bg: 'rgba(52, 152, 219, 0.1)' },
-      ESTIMATED: { text: 'ESTIMATED', color: C.semantic.neutral, bg: 'rgba(148, 163, 184, 0.1)' },
-      CONFLICT: { text: 'CONFLICT', color: C.semantic.danger, bg: 'rgba(231, 76, 60, 0.1)' },
+      ALERT:  { text: 'RISK',      color: C.semantic.danger,  bg: 'rgba(231, 76, 60, 0.1)'  },
+      ADVICE: { text: 'ADVISORY',  color: C.semantic.info,    bg: 'rgba(52, 152, 219, 0.1)' },
+      INSIGHT:{ text: 'VERIFIED',  color: C.semantic.success, bg: 'rgba(46, 204, 113, 0.1)' },
     };
-    return labels[status] || labels.ESTIMATED;
+    return labels[step?.type] || { text: 'ESTIMATED', color: 'rgba(148,163,184,1)', bg: 'rgba(148,163,184,0.1)' };
   };
 
-  const hasConflict = Object.values(synthesis?.alignment || {}).some(v => v.status === 'CONFLICT');
+  const hasConflict = (fatalRisks.length > 0) || state?.system?.consistencyConflicts?.length > 0;
 
   return (
     <div>
@@ -126,13 +129,13 @@ export const SovereignMemoPanel = () => {
               textTransform: 'uppercase',
               letterSpacing: '1px'
             }}>Sovereign Site Memo</h1>
-            <div style={{ fontSize: '13px', color: C.textSecondary, marginTop: 8, letterSpacing: '0.5px' }}>
-              Date: {new Date().toLocaleDateString()} | Scenario: <span style={{ fontWeight: 700 }}>{state.system.activeScenarioId || 'Default'}</span>
+            <div style={{ fontSize: '13px', color: C.text.secondary, marginTop: 8, letterSpacing: '0.5px' }}>
+              Date: {new Date().toLocaleDateString('en-AU')} | Scenario: <span style={{ fontWeight: 700 }}>{state.system.activeScenarioId || 'Default'}</span>
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontWeight: 800, fontSize: '18px', lineHeight: 1.2 }}>{site.address || "UNSPECIFIED PROPERTY"}</div>
-            <div style={{ fontSize: '12px', color: C.textSecondary, marginTop: 4 }}>Project ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}</div>
+            <div style={{ fontSize: '12px', color: C.text.secondary, marginTop: 4 }}>Project ID: {projectId}</div>
           </div>
         </div>
 
@@ -148,34 +151,37 @@ export const SovereignMemoPanel = () => {
           borderRadius: '12px',
           boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)'
         }}>
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            justifyContent: 'center', 
-            alignItems: 'center', 
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
             textAlign: 'center',
             borderRight: `1px solid ${C.surface.border}`,
             paddingRight: '30px'
           }}>
             <div style={{ fontSize: '12px', fontWeight: 800, color: C.text.secondary, textTransform: 'uppercase', marginBottom: 15 }}>Investment Decision</div>
-            <div style={{ 
-              fontSize: '24px', 
-              fontWeight: 900, 
-              padding: '10px 20px', 
-              borderRadius: '4px', 
-              backgroundColor: (fin.margin >= params.targetMargin) ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)', 
-              color: (fin.margin >= params.targetMargin) ? C.semantic.success : C.semantic.danger, 
-              border: `2px solid ${(fin.margin >= params.targetMargin) ? C.semantic.success : C.semantic.danger}`,
+            <div style={{
+              fontSize: '24px',
+              fontWeight: 900,
+              padding: '10px 20px',
+              borderRadius: '4px',
+              backgroundColor: (calc.margin >= targetMargin) ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+              color: (calc.margin >= targetMargin) ? C.semantic.success : C.semantic.danger,
+              border: `2px solid ${(calc.margin >= targetMargin) ? C.semantic.success : C.semantic.danger}`,
               textTransform: 'uppercase',
               letterSpacing: '1px'
             }}>
-              {(fin.margin >= params.targetMargin) ? 'PROCEED' : 'RENEGOTIATE'}
+              {(calc.margin >= targetMargin) ? 'PROCEED' : 'RENEGOTIATE'}
+            </div>
+            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>
+              Hurdle: {targetMargin}% margin
             </div>
           </div>
-          
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(3, 1fr)', 
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
             gap: '20px',
             alignItems: 'center'
           }}>
@@ -185,14 +191,14 @@ export const SovereignMemoPanel = () => {
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '11px', color: C.text.secondary, textTransform: 'uppercase', fontWeight: 700 }}>Project Profit</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: C.text.primary }}>${(calc.profit || 0).toLocaleString()}</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: calc.profit >= 0 ? C.semantic.success : C.semantic.danger }}>${(calc.profit || 0).toLocaleString()}</div>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '11px', color: C.text.secondary, textTransform: 'uppercase', fontWeight: 700 }}>Project Margin</div>
-              <div style={{ 
-                fontSize: '20px', 
-                fontWeight: 800, 
-                color: (calc.margin >= (params.targetMargin || 20)) ? C.semantic.success : C.semantic.danger 
+              <div style={{
+                fontSize: '20px',
+                fontWeight: 800,
+                color: (calc.margin >= targetMargin) ? C.semantic.success : C.semantic.danger
               }}>
                 {(calc.margin || 0).toFixed(2)}%
               </div>
@@ -215,9 +221,9 @@ export const SovereignMemoPanel = () => {
             <div style={{ fontSize: '12px', fontWeight: 800, color: C.text.primary, textTransform: 'uppercase', marginBottom: 15, borderBottom: `1px solid ${accentColor}44`, paddingBottom: 5 }}>Financial Baseline</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
               <div><span style={{ color: C.text.secondary }}>Land Price:</span> <strong style={{ marginLeft: 4, color: C.text.primary }}>${(fin.landPrice || 0).toLocaleString()}</strong></div>
-              <div><span style={{ color: C.text.secondary }}>Est. GRV:</span> <strong style={{ marginLeft: 4, color: C.text.primary }}>${(params.grv || 0).toLocaleString()}</strong></div>
+              <div><span style={{ color: C.text.secondary }}>Est. GRV:</span> <strong style={{ marginLeft: 4, color: C.text.primary }}>${(calc.grv || 0).toLocaleString()}</strong></div>
               <div><span style={{ color: C.text.secondary }}>Build Cost:</span> <strong style={{ marginLeft: 4, color: C.text.primary }}>${(fin.buildCostPSM || 0).toLocaleString()} /m²</strong></div>
-              <div><span style={{ color: C.text.secondary }}>Target Margin:</span> <strong style={{ marginLeft: 4, color: C.text.primary }}>{(params.targetMargin || 20)}%</strong></div>
+              <div><span style={{ color: C.text.secondary }}>Target Margin:</span> <strong style={{ marginLeft: 4, color: C.text.primary }}>{targetMargin}%</strong></div>
             </div>
           </div>
         </div>
@@ -227,18 +233,18 @@ export const SovereignMemoPanel = () => {
           <div style={{ fontSize: '12px', fontWeight: 800, color: C.slate, textTransform: 'uppercase', marginBottom: 20, borderBottom: '1px solid #eee', paddingBottom: 5 }}>Yield & Footprint Efficiency</div>
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '50px', padding: '20px 0' }}>
             <div style={{ textAlign: 'center' }}>
-               <div style={{ fontSize: '11px', color: C.textSecondary, textTransform: 'uppercase', fontWeight: 700 }}>Total Lot Area</div>
+               <div style={{ fontSize: '11px', color: C.text.secondary, textTransform: 'uppercase', fontWeight: 700 }}>Total Lot Area</div>
                <div style={{ fontSize: '22px', fontWeight: 800 }}>{site.area || 0} m²</div>
             </div>
             <div style={{ fontSize: '24px', color: C.border }}>→</div>
-            <YieldWaterfall 
-              total={site.area || 0} 
+            <YieldWaterfall
+              total={Number(site.area) || 0}
               deductions={[
-                { label: 'Setbacks', value: (site.setbackLoss || 0) },
-                { label: 'Easements', value: (site.easementLoss || 0) },
-                { label: 'TPZ', value: (site.tpzLoss || 0) },
-              ]} 
-              final={site.footprint || 0} 
+                { label: 'Setbacks',  value: liveSnapshot.setbackLoss || 0 },
+                { label: 'Easements', value: 0 },
+                { label: 'TPZ',       value: 0 },
+              ]}
+              final={liveSnapshot.footprint || 0}
             />
           </div>
         </div>

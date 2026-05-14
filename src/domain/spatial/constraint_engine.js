@@ -1,8 +1,53 @@
 /**
  * @file domain/spatial/constraint_engine.js
  * @description Maps legal/physical facts to financial and operational impacts.
- * @version 1.2.0 - Added S.173 handling, calcOverlayTimeline
+ * @version 1.3.0 - Added ZONE_DEFAULTS for Victorian residential/mixed zones
  */
+
+/**
+ * Zone-level planning defaults for Victorian residential and mixed-use zones.
+ * cov  = max site coverage ratio (0–1)
+ * gdn  = min garden/permeable area ratio (0–1)
+ * hgt  = preferred max building height (metres)
+ * lots = min lot size per dwelling for subdivision (m²)
+ */
+export const ZONE_DEFAULTS = {
+  // Neighbourhood Residential Zone
+  NRZ:  { cov: 0.40, gdn: 0.35, hgt: 8,  lots: 300, label: 'Neighbourhood Residential Zone' },
+  NRZ1: { cov: 0.40, gdn: 0.35, hgt: 8,  lots: 300, label: 'Neighbourhood Residential Zone 1' },
+  NRZ2: { cov: 0.40, gdn: 0.35, hgt: 8,  lots: 300, label: 'Neighbourhood Residential Zone 2' },
+  NRZ3: { cov: 0.40, gdn: 0.35, hgt: 8,  lots: 300, label: 'Neighbourhood Residential Zone 3' },
+  // General Residential Zone
+  GRZ:  { cov: 0.60, gdn: 0.25, hgt: 9,  lots: 250, label: 'General Residential Zone' },
+  GRZ1: { cov: 0.60, gdn: 0.25, hgt: 9,  lots: 250, label: 'General Residential Zone 1' },
+  GRZ2: { cov: 0.60, gdn: 0.25, hgt: 9,  lots: 250, label: 'General Residential Zone 2' },
+  GRZ3: { cov: 0.60, gdn: 0.25, hgt: 9,  lots: 250, label: 'General Residential Zone 3' },
+  // Residential Growth Zone
+  RGZ:  { cov: 0.65, gdn: 0.20, hgt: 13.5, lots: 200, label: 'Residential Growth Zone' },
+  RGZ1: { cov: 0.65, gdn: 0.20, hgt: 13.5, lots: 200, label: 'Residential Growth Zone 1' },
+  RGZ2: { cov: 0.65, gdn: 0.20, hgt: 13.5, lots: 200, label: 'Residential Growth Zone 2' },
+  // Mixed Use Zone
+  MUZ:  { cov: 0.70, gdn: 0.10, hgt: 16,  lots: 150, label: 'Mixed Use Zone' },
+  // Activity Centre / Commercial zones (no garden requirement)
+  ACZ:  { cov: 0.80, gdn: 0.05, hgt: 24,  lots: 100, label: 'Activity Centre Zone' },
+  // Township Zone
+  TZ:   { cov: 0.50, gdn: 0.25, hgt: 9,   lots: 300, label: 'Township Zone' },
+};
+
+/**
+ * Returns zone planning defaults for the given zone code.
+ * Falls back gracefully using the base zone prefix (NRZ1 → NRZ).
+ * @param {string} zoneCode - e.g. 'NRZ2', 'GRZ1'
+ * @returns {{ cov, gdn, hgt, lots, label }}
+ */
+export const getZoneDefaults = (zoneCode) => {
+  if (!zoneCode) return ZONE_DEFAULTS.GRZ; // safe fallback
+  const code = zoneCode.toUpperCase().trim();
+  if (ZONE_DEFAULTS[code]) return ZONE_DEFAULTS[code];
+  // Strip trailing digit(s) and retry (e.g. NRZ4 → NRZ)
+  const base = code.replace(/\d+$/, '');
+  return ZONE_DEFAULTS[base] || ZONE_DEFAULTS.GRZ;
+};
 
 export const CONSTRAINT_MATRIX = {
   'VPO': {

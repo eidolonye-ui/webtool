@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<h2 class="sr-only">WebTool SaaS 系统架构拓扑图与使用思维导图</h2>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0e1a; color: #e2e8f0; font-family: 'SF Pro Display', -apple-system, sans-serif; font-size: 13px; overflow-x: hidden; }
+
+  .tabs { display: flex; background: #111827; border-bottom: 1px solid #1e293b; padding: 0 20px; position: sticky; top: 0; z-index: 100; }
+  .tab { padding: 12px 18px; cursor: pointer; font-weight: 600; font-size: 12px; color: #64748b; border-bottom: 2px solid transparent; transition: all .2s; white-space: nowrap; }
+  .tab.active { color: #60a5fa; border-bottom-color: #60a5fa; }
+  .tab:hover:not(.active) { color: #94a3b8; }
+
+  .page { display: none; padding: 20px; min-height: 600px; }
+  .page.active { display: block; }
+
+  /* ── TOPOLOGY ── */
+  .topo-grid { display: grid; grid-template-columns: 200px 1fr 200px; gap: 0; min-height: 640px; position: relative; }
+  .topo-col { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+  .topo-col-center { padding: 10px 20px; }
+
+  .layer-label { font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #475569; margin-bottom: 4px; padding: 0 4px; }
+
+  .node { border-radius: 8px; padding: 8px 10px; border: 1px solid; cursor: pointer; transition: all .15s; position: relative; }
+  .node:hover { transform: translateX(2px); filter: brightness(1.15); }
+  .node-title { font-weight: 700; font-size: 11px; line-height: 1.3; }
+  .node-sub { font-size: 9px; opacity: .65; margin-top: 2px; }
+  .node-badge { display: inline-block; font-size: 8px; font-weight: 700; border-radius: 3px; padding: 1px 4px; margin-top: 3px; }
+
+  /* color themes */
+  .c-blue   { background: #1e3a5f22; border-color: #3b82f666; color: #93c5fd; }
+  .c-blue .node-badge   { background: #1e40af; color: #bfdbfe; }
+  .c-green  { background: #14532d22; border-color: #22c55e66; color: #86efac; }
+  .c-green .node-badge  { background: #15803d; color: #bbf7d0; }
+  .c-purple { background: #3b0764 22; border-color: #a855f766; color: #d8b4fe; }
+  .c-purple .node-badge { background: #7e22ce; color: #e9d5ff; }
+  .c-yellow { background: #422006 22; border-color: #f59e0b66; color: #fcd34d; }
+  .c-yellow .node-badge { background: #92400e; color: #fef3c7; }
+  .c-red    { background: #450a0a 22; border-color: #ef444466; color: #fca5a5; }
+  .c-slate  { background: #1e293b;   border-color: #334155;   color: #94a3b8; }
+  .c-store  { background: #0f172a; border: 2px solid #3b82f6; color: #e2e8f0; border-radius: 12px; padding: 12px; }
+
+  .store-center { display: flex; flex-direction: column; gap: 6px; }
+  .store-box { border-radius: 6px; padding: 6px 10px; }
+  .store-header { font-size: 11px; font-weight: 800; color: #60a5fa; text-align: center; padding: 6px; border-bottom: 1px solid #1e3a5f; margin-bottom: 6px; letter-spacing: .05em; }
+  .store-field { font-size: 9px; color: #64748b; display: flex; flex-wrap: wrap; gap: 3px; }
+  .sf { background: #1e293b; border: 1px solid #334155; border-radius: 3px; padding: 1px 5px; color: #94a3b8; font-size: 8px; }
+
+  .arrow-row { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 9px; color: #475569; padding: 2px 0; }
+  .arrow { color: #3b82f6; font-size: 12px; }
+  .arrow-label { font-size: 8px; color: #475569; }
+
+  /* ── WORKFLOW MIND MAP ── */
+  .workflow { display: flex; flex-direction: column; gap: 16px; }
+  .wf-step { display: flex; gap: 14px; align-items: flex-start; }
+  .wf-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; flex-shrink: 0; margin-top: 2px; }
+  .wf-content { flex: 1; }
+  .wf-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+  .wf-body { font-size: 11px; color: #94a3b8; line-height: 1.6; }
+  .wf-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .chip { font-size: 9px; padding: 2px 7px; border-radius: 20px; font-weight: 600; }
+  .wf-connector { width: 2px; height: 12px; background: #1e293b; margin-left: 13px; }
+
+  /* ── GEOCODING ── */
+  .geo-section { display: flex; flex-direction: column; gap: 14px; }
+  .geo-card { background: #111827; border: 1px solid #1e293b; border-radius: 10px; padding: 14px; }
+  .geo-card-title { font-weight: 800; font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .geo-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+  .geo-node { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 5px 10px; font-size: 10px; font-weight: 600; }
+  .geo-arrow { color: #475569; font-size: 14px; }
+  .geo-status { display: flex; gap: 6px; align-items: center; font-size: 10px; }
+  .dot-ok   { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink:0; }
+  .dot-warn { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; flex-shrink:0; }
+  .dot-bad  { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; flex-shrink:0; }
+  .solution-box { background: #0c1a0c; border: 1px solid #22c55e55; border-radius: 8px; padding: 12px; margin-top: 8px; }
+  .solution-title { color: #4ade80; font-weight: 800; font-size: 11px; margin-bottom: 6px; }
+  .code-block { background: #0a0e1a; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; font-family: 'SF Mono', monospace; font-size: 10px; color: #7dd3fc; margin-top: 6px; line-height: 1.7; overflow-x: auto; }
+  .highlight { color: #4ade80; }
+  .comment { color: #475569; }
+
+  /* engine map */
+  .eng-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .eng-item { background: #111827; border: 1px solid #1e293b; border-radius: 8px; padding: 8px; }
+  .eng-name { font-size: 10px; font-weight: 700; color: #60a5fa; margin-bottom: 3px; }
+  .eng-desc { font-size: 9px; color: #64748b; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <div class="tab active" onclick="show('topo')">🗺 系统拓扑</div>
+  <div class="tab" onclick="show('workflow')">📋 使用流程</div>
+  <div class="tab" onclick="show('engines')">⚙️ 引擎全览</div>
+  <div class="tab" onclick="show('geocoding')">📍 地块精度方案</div>
+</div>
+
+<!-- ═══════════════════════════════ TOPO ═══════════════════════════════ -->
+<div class="page active" id="page-topo">
+  <div style="color:#64748b;font-size:11px;margin-bottom:14px;">数据从左（输入）流向右（输出），经过中央 Store 调度。点击节点查看说明。</div>
+  <div class="topo-grid">
+
+    <!-- LEFT: INPUTS -->
+    <div class="topo-col">
+      <div class="layer-label">输入层</div>
+
+      <div class="node c-blue" title="地址搜索 → Nominatim geocoding → lat/lon">
+        <div class="node-title">🔍 地址搜索</div>
+        <div class="node-sub">Nominatim OSM geocoding</div>
+        <span class="node-badge">Site Investigation</span>
+      </div>
+
+      <div class="node c-blue" title="上传 VicPlan / S32 / Survey PDF，通过 pdf_ocr 解析">
+        <div class="node-title">📄 文件上传</div>
+        <div class="node-sub">VicPlan · S32 · Survey PDF</div>
+        <span class="node-badge">ai_adapter</span>
+      </div>
+
+      <div class="node c-blue" title="用户在各 Panel 手动输入数值">
+        <div class="node-title">✏️ 手动输入</div>
+        <div class="node-sub">各面板字段手动填写</div>
+        <span class="node-badge">store.dispatch</span>
+      </div>
+
+      <div style="margin-top:8px;" class="layer-label">外部 API</div>
+
+      <div class="node c-slate" title="OSM Overpass API — 地籍边界">
+        <div class="node-title">🌍 OSM Overpass</div>
+        <div class="node-sub">地籍 / 地形多边形</div>
+      </div>
+      <div class="node c-slate" title="Vicmap WFS — 官方维多利亚地块数据">
+        <div class="node-title">🏛 Vicmap WFS</div>
+        <div class="node-sub">官方地块边界 (DEECA)</div>
+      </div>
+      <div class="node c-slate" title="OpenTopoData — 海拔高程">
+        <div class="node-title">⛰ OpenTopoData</div>
+        <div class="node-sub">SRTM30m 高程数据</div>
+      </div>
+      <div class="node c-slate" title="VicPlan API — 规划区域 overlay">
+        <div class="node-title">📐 VicPlan API</div>
+        <div class="node-sub">分区 · Overlay 数据</div>
+      </div>
+    </div>
+
+    <!-- CENTER: STORE + ENGINES -->
+    <div class="topo-col topo-col-center">
+      <div class="layer-label" style="text-align:center;">核心处理层</div>
+
+      <!-- Domain engines row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+        <div class="node c-purple" style="font-size:10px;">
+          <div class="node-title">terrain_engine</div>
+          <div class="node-sub">地块 · 坡度 · 面积</div>
+        </div>
+        <div class="node c-purple" style="font-size:10px;">
+          <div class="node-title">location_engine</div>
+          <div class="node-sub">学校 · 交通 · 便利</div>
+        </div>
+        <div class="node c-purple" style="font-size:10px;">
+          <div class="node-title">ai_adapter</div>
+          <div class="node-sub">S32 · VicPlan 解析</div>
+        </div>
+        <div class="node c-purple" style="font-size:10px;">
+          <div class="node-title">constraint_engine</div>
+          <div class="node-sub">限制条件 → 成本</div>
+        </div>
+      </div>
+
+      <!-- STORE -->
+      <div class="c-store">
+        <div class="store-header">🗄 CENTRAL STORE (Flux)</div>
+        <div class="store-center">
+          <div class="store-box" style="background:#0f2744;border:1px solid #1e3a5f;">
+            <div style="font-size:9px;font-weight:700;color:#60a5fa;margin-bottom:4px;">system</div>
+            <div class="store-field">
+              <span class="sf">activeScenarioId</span><span class="sf">activePersona</span><span class="sf">userPrefs</span><span class="sf">lastInsights</span>
+            </div>
+          </div>
+          <div class="store-box" style="background:#0a1f0a;border:1px solid #14532d;">
+            <div style="font-size:9px;font-weight:700;color:#4ade80;margin-bottom:4px;">scenarios[id]</div>
+            <div class="store-field">
+              <span class="sf">site.*</span><span class="sf">planning.*</span><span class="sf">physical.*</span><span class="sf">market.*</span><span class="sf">finance.*</span><span class="sf">financing.*</span><span class="sf">calculations.*</span><span class="sf">trustOverrides</span>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <div class="node c-green" style="font-size:9px;padding:5px 8px;">
+            <div class="node-title" style="font-size:9px;">batchDispatch()</div>
+            <div class="node-sub">原子批量更新</div>
+          </div>
+          <div class="node c-green" style="font-size:9px;padding:5px 8px;">
+            <div class="node-title" style="font-size:9px;">createScenario()</div>
+            <div class="node-sub">多场景管理</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calc engines row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">
+        <div class="node c-yellow" style="font-size:10px;">
+          <div class="node-title">live_calc_engine</div>
+          <div class="node-sub">IRR · margin · TDC</div>
+        </div>
+        <div class="node c-yellow" style="font-size:10px;">
+          <div class="node-title">sensitivity_engine</div>
+          <div class="node-sub">±10% 热力矩阵</div>
+        </div>
+        <div class="node c-yellow" style="font-size:10px;">
+          <div class="node-title">irr_engine</div>
+          <div class="node-sub">Newton-Raphson IRR</div>
+        </div>
+        <div class="node c-yellow" style="font-size:10px;">
+          <div class="node-title">tax_engine</div>
+          <div class="node-sub">印花税 · GST</div>
+        </div>
+        <div class="node c-yellow" style="font-size:10px;">
+          <div class="node-title">risk_engine</div>
+          <div class="node-sub">overlay 风险评估</div>
+        </div>
+        <div class="node c-yellow" style="font-size:10px;">
+          <div class="node-title">comparison_engine</div>
+          <div class="node-sub">多场景矩阵</div>
+        </div>
+      </div>
+
+      <!-- Audit row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+        <div class="node c-red" style="font-size:10px;">
+          <div class="node-title">consistency_auditor</div>
+          <div class="node-sub">逻辑冲突检测</div>
+        </div>
+        <div class="node c-red" style="font-size:10px;">
+          <div class="node-title">confidence_engine</div>
+          <div class="node-sub">数据置信度评分</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: OUTPUTS -->
+    <div class="topo-col">
+      <div class="layer-label">输出层 (UI Panels)</div>
+
+      <div class="node c-green">
+        <div class="node-title">1 Site Investigation</div>
+        <div class="node-sub">地块 · 地形 · 位置评分</div>
+      </div>
+      <div class="node c-green">
+        <div class="node-title">2 Physical Conditions</div>
+        <div class="node-sub">坡度 · 土壤 · 地基成本</div>
+      </div>
+      <div class="node c-green">
+        <div class="node-title">3 Planning & Zoning</div>
+        <div class="node-sub">分区 · 限制 · 权属</div>
+      </div>
+      <div class="node c-green">
+        <div class="node-title">4 Market Intelligence</div>
+        <div class="node-sub">GRV · 市场趋势</div>
+      </div>
+      <div class="node c-green">
+        <div class="node-title">5 Financial Analysis</div>
+        <div class="node-sub">TDC · IRR · 印花税</div>
+      </div>
+      <div class="node c-green">
+        <div class="node-title">6 AI Insights</div>
+        <div class="node-sub">敏感性矩阵 · 风险</div>
+      </div>
+      <div class="node c-green">
+        <div class="node-title">7 Comparison</div>
+        <div class="node-sub">多策略对比矩阵</div>
+      </div>
+      <div class="node c-green">
+        <div class="node-title">8 Executive Report</div>
+        <div class="node-sub">PDF / Obsidian 导出</div>
+      </div>
+      <div class="node c-blue" style="margin-top:8px;">
+        <div class="node-title">9 Sovereign Memo</div>
+        <div class="node-sub">PROCEED / RENEGOTIATE</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ WORKFLOW ═══════════════════════════════ -->
+<div class="page" id="page-workflow">
+  <div style="color:#64748b;font-size:11px;margin-bottom:16px;">推荐的 9 步使用流程 — 从地址搜索到投资决策</div>
+  <div class="workflow">
+
+    <div class="wf-step">
+      <div class="wf-num" style="background:#1e3a5f;color:#60a5fa;">1</div>
+      <div class="wf-content">
+        <div class="wf-title" style="color:#60a5fa;">输入目标地址 → 锁定地块</div>
+        <div class="wf-body">在 Site Investigation 面板顶部搜索框输入完整地址（如 "12 Smith St, Melbourne VIC 3000"）。系统自动调用 OSM Nominatim geocoding，获取 lat/lon，随后通过 4 级级联（OSM by ID → OSM Cadastral → Vicmap WFS → OSM Containing）拉取官方地块边界、面积、正面宽、深度、高程数据。</div>
+        <div class="wf-chips">
+          <span class="chip" style="background:#1e3a5f;color:#93c5fd;">terrain_engine</span>
+          <span class="chip" style="background:#1e3a5f;color:#93c5fd;">Vicmap WFS</span>
+          <span class="chip" style="background:#1e3a5f;color:#93c5fd;">卫星地图自动定位</span>
+        </div>
+      </div>
+    </div>
+    <div class="wf-connector"></div>
+
+    <div class="wf-step">
+      <div class="wf-num" style="background:#3b0764;color:#d8b4fe;">2</div>
+      <div class="wf-content">
+        <div class="wf-title" style="color:#d8b4fe;">上传 VicPlan / S32 / 测量报告</div>
+        <div class="wf-body">点击 "上传文档" 区域，可同时上传 VicPlan PDF（规划信息）、Section 32（产权文件）、Survey Plan（测量报告）三类文档。系统自动提取：分区代码、overlay 标志、单一住宅契约、S.173 协议、权属登记号（dealing numbers）、地役权宽度、服务供应情况。</div>
+        <div class="wf-chips">
+          <span class="chip" style="background:#3b0764;color:#e9d5ff;">pdf_ocr</span>
+          <span class="chip" style="background:#3b0764;color:#e9d5ff;">ai_adapter</span>
+          <span class="chip" style="background:#3b0764;color:#e9d5ff;">parsers.js</span>
+          <span class="chip" style="background:#3b0764;color:#e9d5ff;">Section 32 段落感知</span>
+        </div>
+      </div>
+    </div>
+    <div class="wf-connector"></div>
+
+    <div class="wf-step">
+      <div class="wf-num" style="background:#14532d;color:#4ade80;">3</div>
+      <div class="wf-content">
+        <div class="wf-title" style="color:#4ade80;">确认并应用提取结果</div>
+        <div class="wf-body">文档解析完成后，面板显示 "已提取字段预览"，绿色 ✅ 字段为自动填充。点击 "Apply" 按钮将数据批量写入 Store（priority: VicPlan < S32 < Survey，后者覆盖前者）。自动估算字段带 "EST" 标记，可随时手动覆盖。左侧边栏置信度评分实时更新。</div>
+        <div class="wf-chips">
+          <span class="chip" style="background:#14532d;color:#bbf7d0;">batchDispatch</span>
+          <span class="chip" style="background:#14532d;color:#bbf7d0;">confidence_engine</span>
+          <span class="chip" style="background:#14532d;color:#bbf7d0;">ConfidenceCard</span>
+        </div>
+      </div>
+    </div>
+    <div class="wf-connector"></div>
+
+    <div class="wf-step">
+      <div class="wf-num" style="background:#1e1a06;color:#fcd34d;">4</div>
+      <div class="wf-content">
+        <div class="wf-title" style="color:#fcd34d;">Physical Conditions — 确认地形成本</div>
+        <div class="wf-body">切换至 "Physical Conditions" 面板，检查自动填入的坡度（slope）、朝向（aspect）、高程差，以及自动估算的场地准备费用（Site Works Cost）。如有特殊情况（护坡墙、土壤问题）可手动覆盖，勾选 Lock 图标固定该字段不被后续计算覆盖。</div>
+        <div class="wf-chips">
+          <span class="chip" style="background:#422006;color:#fef3c7;">PhysicalConditionPanel</span>
+          <span class="chip" style="background:#422006;color:#fef3c7;">financeLocks</span>
+        </div>
+      </div>
+    </div>
+    <div class="wf-connector"></div>
+
+    <div class="wf-step">
+      <div class="wf-num" style="background:#1e1a06;color:#fcd34d;">5</div>
+      <div class="wf-content">
+        <div class="wf-title" style="color:#fcd34d;">Planning & Zoning — 核查规划限制</div>
+        <div class="wf-body">切换至 "Planning & Zoning"，在 "Auto-Extracted from Document" 区域检查：分区代码（如 GRZ1、NRZ）、所有 overlay（HO、DDO、SBO）、单一住宅契约（🔒）、S.173 协议（📋）、权属 dealing numbers（如 D151733）。Compliance 面板自动显示该分区的最大高度、覆盖率、退界要求。</div>
+        <div class="wf-chips">
+          <span class="chip" style="background:#422006;color:#fef3c7;">PlanningPanel</span>
+          <span class="chip" style="background:#422006;color:#fef3c7;">zoning_rules</span>
+          <span class="chip" style="background:#422006;color:#fef3c7;">risk_engine</span>
+        </div>
+      </div>
+    </div>
+    <div class="wf-connector"></div>
+
+    <div class="wf-step">
+      <div class="wf-num" style="background:#1a0a2e;color:#c084fc;">6</div>
+      <div class="wf-content">
+        <div class="wf-title" style="color:#c084fc;">Market Intelligence — 输入 GRV</div>
+        <div class="wf-body">在 "Market Intelligence" 面板，输入每套预售价（GRV Per Unit）和开发单位数（Units），以及参考销售周期（DOM）。系统自动计算总 GRV，并连接至财务计算引擎。可参考右侧 ABS 数据指标作为基准。</div>
+        <div class="wf-chips">
+          <span class="chip" style="background:#1a0a2e;color:#e9d5ff;">MarketPanel_V2</span>
+          <span class="chip" style="background:#1a0a2e;color:#e9d5ff;">market.grvPerUnit</span>
+        </div>
+      </div>
+    </div>
+    <div class="wf-connector"></div>
+
+    <div class="wf-step">
+      <div class="wf-num" style="background:#1a0a2e;color:#c084fc;">7</div>
+      <div class="wf-content">
+        <div class="wf-title" style="color:#c084fc;">Financial Analysis — 完善财务参数</div>
+        <div class="wf-body">在 "Financial Analysis" 面板核对：土地价格、建筑面积（可 Lock 防止覆盖）、建造成本/㎡、法律费用、应急备用金比例（%）、项目周期（月）、目标利润率（Target Margin %，影响 Sovereign Memo 的 PROCEED/RENEGOTIATE 判断）。印花税自动计算（海外买家 + OTP 勾选）。</div>
+        <div class="wf-chips">
+          <span class="chip" style="background:#1a0a2e;color:#e9d5ff;">FinancePanel</span>
+          <span class="chip" style="background:#1a0a2e;color:#e9d5ff;">tax_engine</span>
+          <span class="chip" style="background:#1a0a2e;color:#e9d5ff;">live_calc_engine</span>
+          <span class="chip" style="background:#1a0a2e;color:#e9d5ff;">irr_engine</span>
+        </div>
+      </div>
+    </div>
+    <div class="wf-connector"></div>
+
+    <div class="wf-step">
+      <div class="wf-num" style="background:#14532d;color:#4ade80;">8</div>
+      <div class="wf-content">
+        <div class="wf-title" style="color:#4ade80;">AI Insights — 敏感性分析 & 风险评估</div>
+        <div class="wf-body">切换至 "AI Insights"。页面顶部自动显示：True IRR（年化，Newton-Raphson）、开发利润率、资本化利息。5×5 敏感性热力矩阵实时展示 GRV ±10% × 建造成本 ±10% 的利润率变化（绿≥20%、黄12-20%、橙0-12%、红亏损）。点击 "Generate Insights" 获得基于 Melbourne 行业阈值的规则推导风险报告。</div>
+        <div class="wf-chips">
+          <span class="chip" style="background:#14532d;color:#bbf7d0;">InsightPanel</span>
+          <span class="chip" style="background:#14532d;color:#bbf7d0;">sensitivity_engine</span>
+          <span class="chip" style="background:#14532d;color:#bbf7d0;">insight_engine</span>
+        </div>
+      </div>
+    </div>
+    <div class="wf-connector"></div>
+
+    <div class="wf-step">
+      <div class="wf-num" style="background:#1e3a5f;color:#60a5fa;">9</div>
+      <div class="wf-content">
+        <div class="wf-title" style="color:#60a5fa;">Sovereign Memo — 最终投资决策</div>
+        <div class="wf-body">切换至 "Sovereign Memo"，系统生成一份完整的执行备忘录：项目 ID、地块信息摘要、风险条款清单（Trust Layers）、收益瀑布图（Yield Waterfall）、最终判决（PROCEED 🟢 / RENEGOTIATE 🔴）。判决基于 实际利润率 vs 目标利润率（Financial Analysis 中设置的 Target Margin %）。可导出为 PDF 或 Obsidian MD。</div>
+        <div class="wf-chips">
+          <span class="chip" style="background:#1e3a5f;color:#93c5fd;">SovereignMemoPanel</span>
+          <span class="chip" style="background:#1e3a5f;color:#93c5fd;">export_engine</span>
+          <span class="chip" style="background:#1e3a5f;color:#93c5fd;">computeLiveSnapshot()</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ ENGINES ═══════════════════════════════ -->
+<div class="page" id="page-engines">
+  <div style="color:#64748b;font-size:11px;margin-bottom:12px;">系统共 40+ 个 domain 模块，按功能分域。</div>
+
+  <div style="font-size:11px;font-weight:800;color:#a855f6;margin:10px 0 6px;">📐 Spatial 空间域</div>
+  <div class="eng-grid">
+    <div class="eng-item"><div class="eng-name">terrain_engine</div><div class="eng-desc">地址→地块，4级级联：OSM ID → OSM Cadastral → Vicmap WFS → OSM Containing。坡度、高程、面积推导。</div></div>
+    <div class="eng-item"><div class="eng-name">location_engine</div><div class="eng-desc">POI 评分：学校（公私立区分）、火车站、电车、超市、咖啡馆、医院。返回 0-100 位置分。</div></div>
+    <div class="eng-item"><div class="eng-name">confidence_engine</div><div class="eng-desc">6 个数据支柱评分：地址坐标、尺寸、规划区、市场GRV、财务输入、文件智能。</div></div>
+    <div class="eng-item"><div class="eng-name">constraint_engine</div><div class="eng-desc">从 investigation.facts[] 触发成本/风险动作（COST/RISK/BLOCK）。</div></div>
+    <div class="eng-item"><div class="eng-name">risk_engine</div><div class="eng-desc">Overlay 风险评级（HO/DDO/SBO/BMO/VPO），ZSB ResCode 检查。</div></div>
+    <div class="eng-item"><div class="eng-name">synthesis_engine</div><div class="eng-desc">综合地形+规划+位置数据，生成人类可读的场地分析摘要。</div></div>
+    <div class="eng-item"><div class="eng-name">parcel_engine</div><div class="eng-desc">地块尺寸推导：bounding box 旋转（2°步长），最小矩形面积法估算正面宽/深度。</div></div>
+    <div class="eng-item"><div class="eng-name">geo_utils</div><div class="eng-desc">Haversine 距离计算、经纬度边界框、坐标转换工具集。</div></div>
+  </div>
+
+  <div style="font-size:11px;font-weight:800;color:#f59e0b;margin:14px 0 6px;">💰 Finance 财务域</div>
+  <div class="eng-grid">
+    <div class="eng-item"><div class="eng-name">live_calc_engine</div><div class="eng-desc">实时快照：TDC、GRV、profit、margin、IRR、capInterest。防抖 300ms，模块级 _prev 防 HMR。</div></div>
+    <div class="eng-item"><div class="eng-name">irr_engine</div><div class="eng-desc">Newton-Raphson IRR（60次迭代），buildIRRCashFlows S 曲线现金流分布，年化 IRR 输出。</div></div>
+    <div class="eng-item"><div class="eng-name">sensitivity_engine</div><div class="eng-desc">5×5 利润矩阵：GRV ×Cost ±10%，NaN/Infinity 守卫，margin = profit/GRV。</div></div>
+    <div class="eng-item"><div class="eng-name">cashflow_engine</div><div class="eng-desc">Sigmoid S 曲线建造成本月度分布（steepness=0.7），权重归一化。</div></div>
+    <div class="eng-item"><div class="eng-name">tax_engine</div><div class="eng-desc">维多利亚印花税（累进税率），海外买家附加税（8%），OTP 优惠处理，GST 计算。</div></div>
+    <div class="eng-item"><div class="eng-name">comparison_engine</div><div class="eng-desc">多场景策略矩阵，4类预设原型（dual_occ/townhouse/apartments/custom）。</div></div>
+    <div class="eng-item"><div class="eng-name">cost_engine</div><div class="eng-desc">场地准备成本（坡度→费用查表），overlay 触发成本叠加。</div></div>
+    <div class="eng-item"><div class="eng-name">insight_engine</div><div class="eng-desc">规则推导风险报告：margin 阈值、IRR 阈值、overlay 组合，输出 riskLevel/recommendation。</div></div>
+  </div>
+
+  <div style="font-size:11px;font-weight:800;color:#22c55e;margin:14px 0 6px;">📄 Extraction 文件解析域</div>
+  <div class="eng-grid">
+    <div class="eng-item"><div class="eng-name">ai_adapter</div><div class="eng-desc">Section 32 段落感知解析：ENCUMBRANCES 段落提取 → dealing numbers 正则 → 单一住宅契约 10 种变体。</div></div>
+    <div class="eng-item"><div class="eng-name">unified_engine</div><div class="eng-desc">FIELD_TO_PATH 映射表（50+字段），normalizeVicPlanResult / normalizeS32Result，priority merge。</div></div>
+    <div class="eng-item"><div class="eng-name">parsers.js</div><div class="eng-desc">专项解析：lotM 地块编号、easement 地役权宽度、S.173 条款细节、mortgage 抵押权。</div></div>
+    <div class="eng-item"><div class="eng-name">pdf_ocr</div><div class="eng-desc">extractFileText()：ArrayBuffer → pdf.js → 逐页文本拼接，返回完整文档字符串。</div></div>
+  </div>
+
+  <div style="font-size:11px;font-weight:800;color:#ef4444;margin:14px 0 6px;">🔍 Audit 审计域</div>
+  <div class="eng-grid">
+    <div class="eng-item"><div class="eng-name">consistency_auditor</div><div class="eng-desc">防抖 800ms，检测数据逻辑冲突（如 NRZ 但 units>1），写入 system.consistencyConflicts。</div></div>
+    <div class="eng-item"><div class="eng-name">sanity_validator</div><div class="eng-desc">异常值检测：landPrice/buildCostPSM/margin/IRR 超出行业阈值（含百分比表达修正）。</div></div>
+    <div class="eng-item"><div class="eng-name">data_merger</div><div class="eng-desc">多源数据合并策略，confidence 加权优先级处理。</div></div>
+    <div class="eng-item"><div class="eng-name">sovereign_orchestrator</div><div class="eng-desc">整合 risk + consistency + sanity 结果，生成 SovereignMemoPanel 的 trustLayers[]。</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ GEOCODING ═══════════════════════════════ -->
+<div class="page" id="page-geocoding">
+  <div style="color:#64748b;font-size:11px;margin-bottom:14px;">地块信息精度的核心瓶颈分析与免费解决方案。</div>
+
+  <div class="geo-section">
+
+    <!-- Current flow -->
+    <div class="geo-card">
+      <div class="geo-card-title">🔄 当前数据管道（2 阶段）</div>
+      <div class="geo-flow">
+        <div class="geo-node">用户输入地址</div>
+        <div class="geo-arrow">→</div>
+        <div class="geo-node" style="border-color:#f59e0b44;background:#422006;">Nominatim<br><span style="font-size:8px;color:#fcd34d;">OSM 众包数据</span></div>
+        <div class="geo-arrow">→</div>
+        <div class="geo-node">lat / lon</div>
+        <div class="geo-arrow">→</div>
+        <div class="geo-node" style="border-color:#22c55e55;background:#0a1f0a;">Vicmap WFS<br><span style="font-size:8px;color:#4ade80;">官方地块边界</span></div>
+        <div class="geo-arrow">→</div>
+        <div class="geo-node">面积/正面宽/深度</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-top:8px;">
+        <div class="geo-status"><div class="dot-bad"></div><span style="color:#fca5a5;"><b>第一阶段（Nominatim）是精度瓶颈</b> — 新开发项目、细分地块、单元编号在 OSM 可能缺失或坐标偏移</span></div>
+        <div class="geo-status"><div class="dot-ok"></div><span style="color:#86efac;"><b>第二阶段（Vicmap WFS）精度极高</b> — 使用官方维多利亚地籍数据，只要第一阶段坐标准确即准确</span></div>
+        <div class="geo-status"><div class="dot-warn"></div><span>地块尺寸推导（bounding box 旋转法）在不规则地块上存在误差，Survey Plan 上传可完全覆盖</span></div>
+      </div>
+    </div>
+
+    <!-- Solution -->
+    <div class="geo-card">
+      <div class="geo-card-title" style="color:#4ade80;">✅ 一劳永逸的免费方案：双层 Geocoder 级联</div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;">将 Nominatim 替换为 <b style="color:#4ade80;">MapShare VIC Geocoder</b>（第一选择）+ Nominatim（回退），零 API Key，官方维多利亚地址数据集（GNAF + Vicmap Address）。</div>
+
+      <div class="geo-flow">
+        <div class="geo-node" style="border-color:#22c55e55;background:#0a1f0a;">MapShare VIC<br><span style="font-size:8px;color:#4ade80;">GNAF + Vicmap Address</span></div>
+        <div class="geo-arrow">→ 失败时</div>
+        <div class="geo-node" style="border-color:#f59e0b44;">Nominatim<br><span style="font-size:8px;color:#fcd34d;">OSM 众包</span></div>
+        <div class="geo-arrow">→ 仍失败</div>
+        <div class="geo-node" style="border-color:#94a3b855;">Photon<br><span style="font-size:8px;color:#94a3b8;">komoot OSM</span></div>
+      </div>
+
+      <div class="solution-box">
+        <div class="solution-title">📌 替换 SiteInvestigationPanel.jsx 第 404 行</div>
+        <div class="code-block"><span class="comment">// 当前（弱）：</span>
+<span style="color:#ef4444;">const res = await fetch('https://nominatim.openstreetmap.org/search?q=...')</span>
+
+<span class="comment">// 替换为（强）：MapShare VIC 官方 geocoder</span>
+<span class="highlight">const MAPSHARE_URL = 'https://api.mapshare.vic.gov.au/arcgis/rest/services'
+  + '/mapshare/Geocoding/GeocodeServer/findAddressCandidates';</span>
+
+<span class="highlight">async function geocodeAddress(query) {</span>
+  <span class="comment">// 1️⃣ MapShare VIC — GNAF + Vicmap Address（无需 key）</span>
+  <span class="highlight">try {
+    const url = MAPSHARE_URL + '?SingleLine=' + encodeURIComponent(query)
+      + '&maxLocations=5&outFields=*&f=json';
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const d = await r.json();
+    if (d.candidates?.length) {
+      const best = d.candidates[0];
+      return { lat: best.location.y, lon: best.location.x,
+               display: best.address, score: best.score };
+    }
+  } catch(_) {}</span>
+
+  <span class="comment">// 2️⃣ Nominatim fallback</span>
+  <span class="highlight">const r2 = await fetch('https://nominatim.openstreetmap.org/search?q='
+    + encodeURIComponent(query) + '&format=json&countrycodes=au&limit=3');
+  const d2 = await r2.json();
+  if (d2[0]) return { lat: +d2[0].lat, lon: +d2[0].lon, display: d2[0].display_name };
+  return null;
+}</span></div>
+      </div>
+
+      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="background:#0f1f0f;border:1px solid #22c55e33;border-radius:8px;padding:10px;">
+          <div style="font-size:10px;font-weight:800;color:#4ade80;margin-bottom:6px;">MapShare VIC 优势</div>
+          <div style="font-size:9px;color:#86efac;line-height:1.8;">✓ 使用 GNAF（国家地址文件）+ Vicmap Address<br>✓ 每月由 DEECA 官方更新<br>✓ 无 API Key，无请求限制<br>✓ 对维多利亚新建楼盘、细分地块精度最高<br>✓ 返回置信度评分（score 0-100）</div>
+        </div>
+        <div style="background:#1f1f0a;border:1px solid #f59e0b33;border-radius:8px;padding:10px;">
+          <div style="font-size:10px;font-weight:800;color:#fcd34d;margin-bottom:6px;">补充建议（不用改代码）</div>
+          <div style="font-size:9px;color:#fde68a;line-height:1.8;">• 上传 Survey Plan PDF → 自动覆盖面积/正面宽<br>• 正面宽/深度字段设 Lock 锁定防止被覆盖<br>• 用左侧 "Verify on property.com.au" 链接验证<br>• 置信度评分 &lt;55% → 优先补充文件上传<br>• 上传 VicPlan PDF → 规划信息 100% 准确</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Why -->
+    <div class="geo-card">
+      <div class="geo-card-title">🤔 为何 Vicmap WFS（第二阶段）已经很准但地块数据仍有问题？</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.8;">
+        第二阶段（Vicmap WFS）的地块 <b style="color:#e2e8f0;">边界精度</b> 非常高——它是维多利亚官方地籍数据。<br>
+        但 <b style="color:#fcd34d;">bounding box 旋转法</b> 推导正面宽/深度在非矩形或斜向地块上会有 5–15% 误差。<br><br>
+        <b style="color:#e2e8f0;">真正影响所有下游计算的根源</b>：如果第一阶段 Nominatim 返回的坐标偏移超过 20m，Vicmap WFS 的 CONTAINS 查询就会落到邻近错误地块上，导致面积、分区、规划信息全部出错。<br><br>
+        <b style="color:#4ade80;">一劳永逸的结论</b>：把第一阶段换成 MapShare VIC Geocoder，坐标精度提升到 &lt;5m 级别（GNAF），Vicmap WFS 的 CONTAINS 查询成功率接近 100%，整条管道精度根本性提升，无需任何 API key，完全免费，长期有效。
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

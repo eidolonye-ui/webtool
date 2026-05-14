@@ -146,19 +146,25 @@ export const PlanningPanel = () => {
   const zoneRule = ZONE_RULES[zoneCode];
 
   const overlays = [
-    { key: 'hasHO',           label: 'Heritage Overlay',   icon: '🏛️', color: '#7c3aed' },
-    { key: 'hasVPO',          label: 'Vegetation Overlay', icon: '🌳', color: '#16a34a' },
-    { key: 'hasSBO',          label: 'Flood Overlay',      icon: '🌊', color: '#0284c7' },
-    { key: 'hasBMO',          label: 'Bushfire Overlay',   icon: '🔥', color: '#ea580c' },
+    { key: 'hasHO',   label: 'Heritage Overlay (HO)',      icon: '🏛️', color: '#7c3aed' },
+    { key: 'hasVPO',  label: 'Vegetation Overlay (VPO)',   icon: '🌳', color: '#16a34a' },
+    { key: 'hasSBO',  label: 'Flood Overlay (SBO)',        icon: '🌊', color: '#0284c7' },
+    { key: 'hasBMO',  label: 'Bushfire Overlay (BMO)',     icon: '🔥', color: '#ea580c' },
+    { key: 'hasDDO',  label: 'Design & Dev Overlay (DDO)', icon: '📐', color: '#0891b2' },
+    { key: 'hasSLO',  label: 'Landscape Overlay (SLO)',    icon: '🌄', color: '#65a30d' },
+    { key: 'hasESO',  label: 'Environmental Overlay (ESO)',icon: '🌿', color: '#059669' },
+    { key: 'hasACHO', label: 'Aboriginal Heritage (ACHO)', icon: '🪨', color: '#b45309' },
+    { key: 'hasEMO',  label: 'Erosion Overlay (EMO)',      icon: '⛰️', color: '#92400e' },
   ].filter(o => planning[o.key]);
 
-  const hasS173       = planning.hasS173;
-  const hasCovenant   = planning.hasSingleCovenant;
-  const hasEasement   = planning.hasEasementBoe;
-  const s173Details   = planning.s173Details;
-  const covenantDets  = planning.covenantDetails;
+  const hasS173        = planning.hasS173;
+  const hasCovenant    = planning.hasSingleCovenant;
+  const hasEasement    = planning.hasEasementBoe;
+  const s173Details    = planning.s173Details;
+  const covenantDets   = planning.covenantDetails;
+  const dealingNumbers = Array.isArray(planning.dealingNumbers) ? planning.dealingNumbers : [];
 
-  const hasExtractionData = zoneCode || overlays.length > 0 || hasS173 || hasCovenant || hasEasement;
+  const hasExtractionData = zoneCode || overlays.length > 0 || hasS173 || hasCovenant || hasEasement || dealingNumbers.length > 0;
 
   return (
     <UIPanel
@@ -216,6 +222,32 @@ export const PlanningPanel = () => {
                 />
               )}
             </div>
+
+            {/* Dealing Numbers */}
+            {dealingNumbers.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                  Title Dealings on Register
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {dealingNumbers.map(dn => (
+                    <span key={dn} style={{
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                      fontWeight: 700,
+                      color: '#94a3b8',
+                      backgroundColor: 'rgba(148,163,184,0.08)',
+                      border: '1px solid rgba(148,163,184,0.25)',
+                      borderRadius: 4,
+                      padding: '2px 7px',
+                      letterSpacing: '0.04em'
+                    }}>
+                      {dn}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Zone Notes */}
             {zoneRule?.notes && (
