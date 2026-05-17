@@ -373,6 +373,7 @@
       <button id="b-add"           class="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg">+ Add line</button>
       <button id="b-add-sale"      class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg">+ Sale cost</button>
       <button id="b-inject-hidden" class="bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common hidden costs">+ Hidden costs</button>
+      <button id="b-inject-dd"     class="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject due diligence, roof & outdoor presets">🏠 Due Diligence</button>
       <button id="b-seed"          class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg">Load sample</button>
     </div>
   </div>
@@ -390,7 +391,7 @@
       </table>
     </div>
   </div>
-  <p class="text-[11px] text-slate-500 mb-6">Click <strong>Paid</strong> bar to record payments. <strong>+ Hidden costs</strong> injects commonly missed items. Expand rows to set tax labels, HIA milestones, original quotes (for scope creep tracking).</p>
+  <p class="text-[11px] text-slate-500 mb-6">Click <strong>Paid</strong> bar to record payments. <strong>+ Hidden costs</strong> injects commonly missed holding &amp; legal costs. <strong>🏠 Due Diligence</strong> injects inspections, roof &amp; outdoor presets. Expand rows for tax labels, HIA milestones &amp; original quotes.</p>
 
   <!-- Progress Claims -->
   <div class="bg-white rounded-xl border border-slate-200 p-4">
@@ -741,6 +742,55 @@ const HIDDEN_COSTS_LIB=[
   {name:'Mortgage Discharge Fee',cat:'Legal',estimated:350,note:'Lender fee to release mortgage at settlement'},
   {name:'Waste Disposal — Green Waste',cat:'Site Prep',estimated:600,note:'Landscaping green waste; council hard rubbish extra'},
 ];
+
+const DUE_DILIGENCE_LIB=[
+  // ── Pre-purchase / pre-reno inspections ──
+  {name:'Pre-Purchase Building Inspection',cat:'Due Diligence',trade:'Inspector',room:'',priority:'A',
+   estimated:650,note:'Licensed building inspector — structural, roof, subfloor, drainage, moisture. Non-negotiable before purchase or major reno start. Book direct with a HIA or AIBI member.'},
+  {name:'Timber Pest / Termite Inspection',cat:'Due Diligence',trade:'Pest Inspector',room:'',priority:'A',
+   estimated:450,note:'AS 3660.2 timber pest inspection — visual + thermal camera check. Melbourne fringe suburbs high-risk. Combine with building inspection for discount. If live activity found add $3k–$15k treatment budget.'},
+  {name:'Asbestos Survey & Register',cat:'Due Diligence',trade:'Asbestos Assessor',room:'',priority:'A',
+   estimated:800,note:'Pre-1990 homes mandatory before any demolition or disturbance. Licensed asbestos assessor produces register. Required by WorkSafe VIC. Add $5k–$20k if removal needed.'},
+  {name:'Pest Treatment (Termite Barrier)',cat:'Due Diligence',trade:'Pest Control',room:'',priority:'B',
+   estimated:2800,note:'Chemical soil barrier (imidacloprid) full perimeter. AS 3660.1. Valid 8–10 years. Get certificate for insurance and future sale.'},
+  {name:'Plumbing / Drain CCTV Inspection',cat:'Due Diligence',trade:'Plumber',room:'',priority:'B',
+   estimated:550,note:'CCTV camera check of sewer and stormwater lines. Identifies root intrusion, collapsed pipes, offset joints. Critical for older properties. Avoid $5k–$30k surprise repiping.'},
+  {name:'Electrical Safety Audit',cat:'Due Diligence',trade:'Electrician',room:'',priority:'B',
+   estimated:380,note:'Licensed electrician checks switchboard, earthing, RCD protection, smoke alarm compliance. Required before renting (RTA 2021 r140). Identifies if switchboard upgrade needed ($2k–$5k).'},
+
+  // ── Roof ──
+  {name:'Roof Inspection & Report',cat:'Roof',trade:'Roofer',room:'Exterior',priority:'A',
+   estimated:350,note:'Professional roof inspection — tile condition, ridge capping, flashing, gutters, fascia, penetrations. Produces written report with priority defect list. Do before committing to reno scope.'},
+  {name:'Roof Restoration — Full (Clean, Re-point, Seal, Paint)',cat:'Roof',trade:'Roofer',room:'Exterior',priority:'B',
+   estimated:9500,note:'Terracotta/concrete tile: high-pressure clean → re-bed & re-point ridge capping → flexible sealant → 2-coat anti-fungal membrane paint. Typical 180m² Melbourne home. 15-yr warranty from reputable operator.'},
+  {name:'Roof Restoration — Ridge Re-bedding & Re-pointing Only',cat:'Roof',trade:'Roofer',room:'Exterior',priority:'A',
+   estimated:3800,note:'Critical structural repair — mortar bed and flexible pointing on all ridge/hip caps. If skipped, tiles shift in wind and allow water ingress. Price per 10m ridge run approx $380.'},
+  {name:'Roof Leak Repairs (Flashing & Pointing)',cat:'Roof',trade:'Roofer',room:'Exterior',priority:'A',
+   estimated:1800,note:'Targeted repairs to valley flashing, pipe penetrations, skylight seals. Identify all penetration points before quoting — each adds $200–$500.'},
+  {name:'Gutter Replacement (Colorbond)',cat:'Roof',trade:'Roofer',room:'Exterior',priority:'B',
+   estimated:4200,note:'Full gutter, fascia and downpipe replacement — Colorbond steel. Typical 3-bed home perimeter. Price per LM approx $85–$120. Include leaf guard if trees nearby ($25/LM extra).'},
+  {name:'Downpipe Replacement & Stormwater Connection',cat:'Roof',trade:'Plumber',room:'Exterior',priority:'B',
+   estimated:1600,note:'Replace ageing galv or PVC downpipes; ensure connection to legal point of discharge or rainwater tank. Council may require stormwater connection upgrade.'},
+
+  // ── Outdoor / Deck ──
+  {name:'Outdoor Deck — Timber (Spotted Gum / Merbau)',cat:'Outdoor',trade:'Carpenter',room:'Exterior',priority:'B',
+   estimated:18000,note:'Ground-level 30m² hardwood deck — spotted gum or merbau. Includes frame, decking boards, stainless fixings, steps, handrail. Posts in ground: add engineer footing design. 40mm board, 5mm gap. Note: >10m² or >800mm above ground requires Building Permit.'},
+  {name:'Outdoor Deck — Composite (Trex / ModWood)',cat:'Outdoor',trade:'Carpenter',room:'Exterior',priority:'B',
+   estimated:22000,note:'30m² composite decking — low maintenance, fade resistant, 25-yr warranty on product. Higher upfront cost, much lower 10-yr lifecycle cost than hardwood. Requires steel frame not timber. Popular with rental properties.'},
+  {name:'Building Permit — Deck / Pergola',cat:'Outdoor',trade:'',room:'Exterior',priority:'A',
+   estimated:1400,note:'Required in VIC if deck >10m² OR floor level >800mm above ground. Engage private building surveyor. Include engineer drawings for elevated decks. Allow 4–8 weeks approval. Fine for unpermitted deck up to $80k and forced removal.'},
+  {name:'Deck Pergola / Shade Structure',cat:'Outdoor',trade:'Carpenter',room:'Exterior',priority:'C',
+   estimated:8500,note:'Attached pergola over deck — treated pine rafters, privacy lattice, corrugated Colorbond roof. Separate permit if enclosed. Increases property appeal significantly for rental or sale.'},
+  {name:'Outdoor Landscaping — Front & Back',cat:'Outdoor',trade:'Landscaper',room:'Exterior',priority:'C',
+   estimated:12000,note:'Full landscape package: soil prep, turf or artificial grass, garden beds, mulch, irrigation drip system, path edging. Front yard kerb appeal drives 5–10% premium at OFI. Budget separately for large tree removal ($800–$4k per tree).'},
+  {name:'Driveway Reseal / Replacement',cat:'Outdoor',trade:'Concreter',room:'Exterior',priority:'C',
+   estimated:5500,note:'Exposed aggregate or plain concrete driveway replacement. Typical single-car 6m×5m = 30m² approx $180/m². Asphalt reseal cheaper at $40–$60/m². High ROI for street appeal.'},
+  {name:'Retaining Wall',cat:'Outdoor',trade:'Concreter',room:'Exterior',priority:'B',
+   estimated:7500,note:'Concrete block retaining wall — 900mm max height without engineer; above requires geotechnical report & permit. Price per LM approx $650–$900. Essential before landscaping sloped blocks.'},
+  {name:'Outdoor Electrical — Lights, Power & Garden Irrigation Controller',cat:'Outdoor',trade:'Electrician',room:'Exterior',priority:'C',
+   estimated:2200,note:'External weatherproof GPOs, LED downlights under eaves, garden spike lights, irrigation timer board. Adds lifestyle appeal and safety (tenant requirement for external lights under RTA).'},
+];
+
 const VBA_INSPECTIONS=[
   {stage:'Footing (Pre-pour)',description:'Trench dimensions, reinforcement, drainage correct before concrete',mandatory:true},
   {stage:'Slab (Pre-pour)',description:'Membrane, mesh, edge form correct before slab pour',mandatory:false},
@@ -765,6 +815,10 @@ const VIC_COMPLIANCE=[
   {id:'vc11',item:'Owner-Builder Warranty Insurance (if works > $16,000)',category:'Legal',reference:'Domestic Building Contracts Act 1995',dueDate:'',doneDate:'',cost:0,notes:'Required if selling within 6.5 years of owner-builder works'},
   {id:'vc12',item:'Building Permit — Obtained (structural / wet areas / extensions)',category:'Legal',reference:'Building Act 1993 s16',dueDate:'',doneDate:'',cost:0,notes:'Required for structural work, new wet areas, re-stumping, additions'},
   {id:'vc13',item:'Certificate of Final Inspection / Occupancy Permit',category:'Legal',reference:'Building Act 1993',dueDate:'',doneDate:'',cost:0,notes:'Issued by building surveyor on completion of permitted works'},
+  {id:'vc14',item:'Timber Pest / Termite Inspection — AS 3660.2',category:'Safety',reference:'AS 3660.2 / WorkSafe VIC',dueDate:'',doneDate:'',cost:0,notes:'Licensed timber pest inspector; do before any sub-floor or structural work. If live activity: treat before reno commences.'},
+  {id:'vc15',item:'Asbestos Survey & Register (pre-1990 properties)',category:'Safety',reference:'Occupational Health & Safety Regs 2017 r6.3',dueDate:'',doneDate:'',cost:0,notes:'Mandatory before demolition or disturbance of any material in pre-1990 property. Licensed asbestos assessor only.'},
+  {id:'vc16',item:'Building Permit — Deck / Pergola (if >10m² or >800mm high)',category:'Legal',reference:'Building Act 1993 s16 / Building Regs 2018',dueDate:'',doneDate:'',cost:0,notes:'Obtain from private building surveyor before construction. Fine up to $80,000 for unpermitted structure. Include engineer drawings for elevated decks.'},
+  {id:'vc17',item:'Roof Restoration — Ridge Re-bedding Certificate',category:'Safety',reference:'AS 2050 / NCC Section B',dueDate:'',doneDate:'',cost:0,notes:'Get written completion certificate from roofer confirming re-bedding to AS 2050. Keep for insurance and future sale disclosure.'},
 ];
 const OFI_DEFAULT=[
   {id:'o1',room:'Exterior',item:'Gardens tidy, lawns mowed, edges cut, weeds removed',checked:false,notes:''},
@@ -852,7 +906,7 @@ function defaultData(){
       propertyType:'House',investmentStrategy:'Renovate & Hold',
       currentWeeklyRent:0,targetWeeklyRent:0,dlpStartDate:'',dlpMonths:12,area:0,
       rooms:['Kitchen','Bathroom','Laundry','Master Bedroom','Bedroom','Living/Dining','Exterior','Garage'],
-      trades:['Demolition','Carpenter','Electrician','Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper'],
+      trades:['Demolition','Carpenter','Electrician','Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector'],
     },
     contacts:[],budget:[],schedule:[],punch:[],
     inspections:[],compliance:[],ofi:[],risks:[],quotes:[],claims:[],diary:[],
@@ -977,6 +1031,10 @@ function migrate(d){
   // Seed compliance if empty
   if(!d.compliance.length){
     d.compliance=VIC_COMPLIANCE.map(c=>({...c}));
+  } else {
+    // Add any new compliance items not yet present
+    const existingIds=new Set(d.compliance.map(c=>c.id));
+    VIC_COMPLIANCE.filter(c=>!existingIds.has(c.id)).forEach(c=>d.compliance.push({...c}));
   }
   // Seed ofi if empty
   if(!d.ofi.length){
@@ -1139,7 +1197,7 @@ function wireProject(){
   });
   $('p-reset').addEventListener('click',()=>{
     state.project.rooms=['Kitchen','Bathroom','Laundry','Master Bedroom','Bedroom','Living/Dining','Exterior','Garage'];
-    state.project.trades=['Demolition','Carpenter','Electrician','Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper'];
+    state.project.trades=['Demolition','Carpenter','Electrician','Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector'];
     $('p-rooms').value=state.project.rooms.join(', ');
     $('p-trades').value=state.project.trades.join(', ');
   });
@@ -1366,6 +1424,25 @@ function wireBudget(){
   $('b-add').addEventListener('click',()=>addBudgetLine('Renovation'));
   $('b-add-sale').addEventListener('click',()=>addBudgetLine('Sale Cost'));
 
+  $('b-inject-dd').addEventListener('click',()=>{
+    const cats=['Due Diligence','Roof','Outdoor'];
+    const catLabels={'Due Diligence':'Due Diligence & Inspections','Roof':'Roof','Outdoor':'Outdoor & Deck'};
+    // Pick which categories to inject via simple checkbox dialog
+    const chosen=cats.filter(c=>confirm(`Add "${catLabels[c]}" items?\n\nIncludes common ${catLabels[c].toLowerCase()} costs for Melbourne properties.`));
+    if(!chosen.length)return;
+    DUE_DILIGENCE_LIB.filter(d=>chosen.includes(d.cat)).forEach(d=>{
+      state.budget.push({
+        id:uid(),priority:d.priority||'B',description:d.name,
+        room:d.room||'',trade:d.trade||'',mode:'Trade',mlType:'',
+        qty:1,unit:'lot',unitCost:d.estimated,originalCost:d.estimated,
+        taxLabel:'',hia:'',gst:true,paidAmt:0,
+        cat:'Renovation',notes:d.note,invoiceDate:'',
+      });
+    });
+    saveCurrentProject();renderBudget();
+    showToast(`✓ ${chosen.length} categor${chosen.length>1?'ies':'y'} injected`,'bg-teal-600');
+  });
+
   $('b-inject-hidden').addEventListener('click',()=>{
     HIDDEN_COSTS_LIB.forEach(h=>{
       state.budget.push({
@@ -1407,7 +1484,8 @@ function wireBudget(){
     const f=e.target.dataset.f;
     if(!f)return;
     if(f==='gst')b[f]=e.target.checked;
-    else if(['qty','unitCost','paidAmt','originalCost'].includes(f))b[f]=parseFloat(e.target.value)||0;
+    else if(['qty','unitCost','originalCost'].includes(f))b[f]=Math.max(0,parseFloat(e.target.value)||0);
+    else if(f==='paidAmt')b[f]=Math.max(0,parseFloat(e.target.value)||0);
     else b[f]=e.target.value;
     saveCurrentProject();
     // Re-render total cell inline
@@ -1702,6 +1780,7 @@ function wireSchedule(){
       {id:uid(),done:false,task:'Flooring',trade:'',room:'Living/Dining',mode:'Trade',plannedStart:d(p,61),plannedEnd:d(p,67),actualStart:'',actualEnd:'',taskNotes:'',priority:'B',deps:'Painting — full interior'},
       {id:uid(),done:false,task:'Plumbing & electrical fit-off',trade:'Plumber',room:'',mode:'Trade',plannedStart:d(p,61),plannedEnd:d(p,67),actualStart:'',actualEnd:'',taskNotes:'',priority:'A',deps:'Tiling — bathroom & laundry'},
       {id:uid(),done:false,task:'Landscaping — front & back',trade:'Landscaper',room:'Exterior',mode:'Trade',plannedStart:d(p,68),plannedEnd:d(p,77),actualStart:'',actualEnd:'',taskNotes:'',priority:'C',deps:''},
+      {id:uid(),done:false,task:'Outdoor deck construction',trade:'Carpenter',room:'Exterior',mode:'Trade',plannedStart:d(p,65),plannedEnd:d(p,75),actualStart:'',actualEnd:'',taskNotes:'Permit must be obtained before works commence. Check >10m² or >800mm requires VBA Building Permit.',priority:'B',deps:'Painting — full interior'},
       {id:uid(),done:false,task:'Final clean',trade:'',room:'',mode:'Trade',plannedStart:d(p,78),plannedEnd:d(p,80),actualStart:'',actualEnd:'',taskNotes:'',priority:'B',deps:'Flooring,Plumbing & electrical fit-off'},
     ];
     saveCurrentProject();renderSchedule();renderGantt();
@@ -3048,7 +3127,8 @@ function renderSettings(){
   const tokenEl=$('st-gist-token'); if(tokenEl) tokenEl.value=gistToken()?'••••••••••••••••':'';
   const idEl=$('st-gist-id'); if(idEl) idEl.value=gistId();
   const autoEl=$('st-gist-auto'); if(autoEl) autoEl.checked=localStorage.getItem(GIST_AUTO_KEY)==='1';
-  set('st-contingency',s.contingencyPct??12);
+  // Bug fix: always read contingencyPct from state.project (single source of truth)
+  set('st-contingency',state.project?.contingencyPct??s.contingencyPct??12);
   set('st-agent-pct',s.agentCommissionPct??2);
   set('st-permit',s.councilPermitEst??3500);
   set('st-sqm-target',s.costPerSqmTarget??1500);
@@ -3075,7 +3155,10 @@ function wireSettings(){
   $('st-save').addEventListener('click',()=>{
     if(!state.settings)state.settings={};
     const s=state.settings;
-    s.contingencyPct=parseFloat($('st-contingency').value)||12;
+    const newCont=parseFloat($('st-contingency').value)||12;
+    s.contingencyPct=newCont;
+    // Keep state.project in sync — budgetTotals() reads from here
+    if(state.project)state.project.contingencyPct=newCont;
     s.agentCommissionPct=parseFloat($('st-agent-pct').value)||2;
     s.councilPermitEst=parseFloat($('st-permit').value)||3500;
     s.costPerSqmTarget=parseFloat($('st-sqm-target').value)||1500;
@@ -3116,7 +3199,10 @@ function wireSettings(){
 
   $('st-reset').addEventListener('click',()=>{
     state.settings={contingencyPct:12,agentCommissionPct:2,councilPermitEst:3500,stampDutyOverridePct:0,costPerSqmTarget:1500};
+    if(state.project)state.project.contingencyPct=12;
+    saveCurrentProject();
     renderSettings();
+    renderDashboard();
     showToast('Settings reset to defaults','bg-slate-600');
   });
   // Change password
@@ -3235,7 +3321,13 @@ async function gistPull(){
     if(!res.ok) throw new Error(data.message||'Fetch failed');
     const file=data.files?.[GIST_FILE];
     if(!file) throw new Error('No data file found in Gist');
-    const content=JSON.parse(file.content||file.raw_url&&await(await fetch(file.raw_url)).text());
+    // Bug fix: raw_url fetch must also carry Authorization header for private Gists
+    let rawContent=file.content;
+    if(!rawContent&&file.raw_url){
+      const rawRes=await fetch(file.raw_url,{headers:{'Authorization':'Bearer '+token}});
+      rawContent=await rawRes.text();
+    }
+    const content=JSON.parse(rawContent);
     if(!content.index||!content.projects) throw new Error('Invalid data format');
     // Write all projects to localStorage
     saveAllProjects(content.index);
@@ -3253,10 +3345,13 @@ async function gistPull(){
 }
 
 // Auto-push hook — called from saveCurrentProject if enabled
+let _gistAutoTimer=null;
 function gistAutoPushIfEnabled(){
   if(localStorage.getItem(GIST_AUTO_KEY)!=='1') return;
   if(!gistToken()||!gistId()) return;
-  gistPush();
+  // Debounce: wait 4s after last save before pushing to avoid concurrent PATCH conflicts
+  clearTimeout(_gistAutoTimer);
+  _gistAutoTimer=setTimeout(()=>{ gistPush(); },4000);
 }
 
 // ==================== JSON BACKUP / RESTORE ====================
@@ -3380,10 +3475,22 @@ function init(){
     location.reload();
   });
 
-  // Autosave on any input/change anywhere
+  // Autosave on any input/change anywhere + dirty-flag for beforeunload warning
   let _saveTimer;
-  document.addEventListener('input',()=>{clearTimeout(_saveTimer);_saveTimer=setTimeout(saveCurrentProject,800);});
-  document.addEventListener('change',()=>{clearTimeout(_saveTimer);_saveTimer=setTimeout(saveCurrentProject,800);});
+  let _isDirty=false;
+  document.addEventListener('input',()=>{
+    _isDirty=true;
+    clearTimeout(_saveTimer);
+    _saveTimer=setTimeout(()=>{ saveCurrentProject(); _isDirty=false; },800);
+  });
+  document.addEventListener('change',()=>{
+    _isDirty=true;
+    clearTimeout(_saveTimer);
+    _saveTimer=setTimeout(()=>{ saveCurrentProject(); _isDirty=false; },800);
+  });
+  window.addEventListener('beforeunload',e=>{
+    if(_isDirty){ e.preventDefault(); e.returnValue=''; }
+  });
 }
 
 
