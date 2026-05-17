@@ -105,14 +105,43 @@ export const DocumentIntelligenceCard = ({ onEstimatedReset }) => {
         });
       });
 
+      // Fields dispatched to store but not shown in the summary preview.
+      // Internal flags or low-signal data that clutter the UI.
+      const PREVIEW_HIDDEN = new Set([
+        's32Processed',    // internal flag — S32 presence shown via no-covenant banner
+        'servicesTel',     // Telephone/NBN — not a development constraint
+        'hasMortgage',     // Mortgage — standard conveyancing, not a planning constraint
+        'dimensionsSource',// internal source tracking
+      ]);
+
       const updates = [];
       const changes = [];
       Object.entries(mergedPaths).forEach(([path, { val, key }]) => {
         updates.push({ path, value: val });
+        if (PREVIEW_HIDDEN.has(key)) return; // dispatch but hide from summary
         const label   = FIELD_LABELS[key] || key;
-        const display = typeof val === 'boolean' ? 'Yes'
-          : Array.isArray(val) ? val.join(', ').slice(0, 80)
-          : String(val).slice(0, 80);
+        // Smart serializer: handle arrays of objects (e.g. siteEasements) without [object Object]
+        let display;
+        if (typeof val === 'boolean') {
+          display = val ? 'Yes' : 'No';
+        } else if (Array.isArray(val)) {
+          if (val.length === 0) {
+            display = '\u2014';
+          } else if (typeof val[0] === 'object' && val[0] !== null) {
+            // Array of objects — e.g. siteEasements [{type, widthM, ...}]
+            const summary = val.map(e => {
+              const type = e.type || 'Easement';
+              const w    = e.widthM ? e.widthM + 'm' : '';
+              return [type, w].filter(Boolean).join(' ');
+            }).join(', ');
+            display = val.length + ' item' + (val.length !== 1 ? 's' : '') + ': ' + summary.slice(0, 70);
+          } else {
+            display = val.join(', ').slice(0, 80);
+          }
+        } else {
+          display = String(val).slice(0, 80);
+        }
+        if (display === 'No') return; // skip boolean negatives — unset flags add no signal
         changes.push({ label, display });
       });
 

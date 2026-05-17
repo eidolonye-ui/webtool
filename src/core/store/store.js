@@ -41,11 +41,17 @@ class WebToolStore {
             zoning: 'NRZ',
             frontage: 0,
             depth: 0,
+            dimensionsSource: null,   // null | 'terrain' | 'fsp' | 'vicplan' | 'manual'
             investigation: {
-              terrainData: null,
+              terrainData:  null,
               locationData: null,
-              synthesis: null,
-              facts: []
+              synthesis:    null,
+              facts:        [],
+              keyRisks:     [],
+              summary:      '',
+              bmLevel:      null,   // survey benchmark RL
+              surveyDate:   '',
+              surveyorName: ''
             }
           },
           planning: {
@@ -75,14 +81,59 @@ class WebToolStore {
             servicesElec:      false,
             servicesGas:       false,
             servicesWater:     false,
-            servicesSewer:     false
+            servicesSewer:     false,
+            // Council contributions (POS + CIL) — mandatory for 3+ dwellings
+            // POS rate: % of unimproved land value (typical Melbourne range: 2–5%)
+            // CIL: per-dwelling flat fee (typical Melbourne range: $2,000–$6,000)
+            posContributionPct: 3,    // default 3% — conservative mid-range
+            cilPerUnit:         3500, // default $3,500/dwelling
+
+            // ── Title / admin (from VicPlan / S32 / FSP) ────────────────────
+            councilName:             '',
+            lotRef:                  '',
+            titleVolume:             '',
+            titleFolio:              '',
+            propnum:                 '',   // VicPlan property number
+
+            // ── Encumbrances detail (from S32 / FSP) ────────────────────────
+            hasMortgage:             false,
+            hasMCP:                  false,  // Memorandum of Common Provisions
+            hasRestrictiveCovenant:  false,
+            restrictiveCovenantDesc: '',
+            easementDetails:         '',
+            easementWidthM:          '',
+
+            // ── Outgoings (from S32) ─────────────────────────────────────────
+            councilRates:            0,
+            waterRates:              0,
+            landTaxAmt:              0,
+
+            // ── Services (from S32) ──────────────────────────────────────────
+            servicesTel:             false,
+
+            // ── Planning permit on title ─────────────────────────────────────
+            hasPermit:               false,
+            permitNo:                '',
+
+            // ── Document processing state ────────────────────────────────────
+            s32Processed:            false, // true once a Section 32 has been parsed (even if covenant not found)
+
+            // ── Environmental attributes (from VicPlan) ──────────────────────
+            bushfireZone:            '',   // e.g. 'Yes', 'No', 'BMO'
+            nativeVeg:               '',   // 'Within' | 'Outside' | ''
           },
           physical: {
             slope:                    null,
+            slopeDeg:                 null,   // slope in degrees (derived from %)
             aspect:                   null,
             elevationDelta:           null,
+            ahdMin:                   null,   // lowest AHD spot height on site
+            ahdMax:                   null,   // highest AHD spot height on site
+            frontToRearDelta:         null,   // front boundary → rear boundary height diff (m)
+            leftToRightDelta:         null,   // left side → right side height diff / cross-fall (m)
             soilType:                 'Standard',
-            easements:                [],
+            easements:                [],     // user-editable string or legacy
+            siteEasements:            [],     // enriched FSP easement array [{type,widthM,boundary,affectedAreaM2,desc}]
             siteWorksCost:            0,
             siteWorksCostOverridden:  false
           },
@@ -95,7 +146,7 @@ class WebToolStore {
           finance: {
             landPrice: 0,
             isForeign: false,
-            isOTP: true,
+            // isOTP removed — OTP concession abolished for developer/investment purchases 2017-07-01
             buildArea: 0,
             buildCostPSM: 0,
             legalFees: 0,

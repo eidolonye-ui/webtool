@@ -38,8 +38,17 @@ export const FinancePanel = () => {
   const accentColor  = state.system.activeAccentColor || '#0f4c75';
 
   // Correct path for terrain data
-  const terrainData  = site?.investigation?.terrainData;
-  const projectMonths= finance?.projectMonths || 24;         // safe optional chaining
+  const terrainData       = site?.investigation?.terrainData;
+  const projectMonths     = finance?.projectMonths || 24;    // safe optional chaining
+
+  // ── Dimension confidence ────────────────────────────────────────────
+  // 'fsp'     = confirmed by Feature & Level Survey Plan (most accurate)
+  // 'vicplan'  = cadastre-grade from VicPlan (good, no slope detail)
+  // 'terrain'  = suburb-average estimate (unreliable for financial use)
+  // null       = no address entered yet
+  const dimensionsSource  = site?.dimensionsSource || null;
+  const dimIsEstimated    = dimensionsSource === 'terrain' || (!dimensionsSource && terrainData?.isEstimate);
+  const estBuildArea      = suggestions.estimatedBuildArea || 0; // suggested, not written to finance
 
   // ── Field update helpers ────────────────────────────────────────────
   const setFin  = useCallback((field, value) => store.dispatch('finance.' + field, value), []);
@@ -138,6 +147,69 @@ export const FinancePanel = () => {
             backgroundColor: 'rgba(0,184,107,0.1)', border: '1px solid rgba(0,184,107,0.3)'
           }}>
             {syncMsg}
+          </div>
+        )}
+
+        {/* ── UNCONFIRMED DIMENSIONS WARNING ── */}
+        {dimIsEstimated && (
+          <div style={{
+            padding: '12px 16px',
+            borderRadius: T.r.sm,
+            backgroundColor: 'rgba(250,100,0,0.08)',
+            border: '1px solid rgba(250,100,0,0.3)',
+            borderLeft: '4px solid rgba(250,100,0,0.8)',
+            display: 'flex', flexDirection: 'column', gap: 6
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>&#9888;</span>
+              <span style={{ fontSize: T.fs.xs, fontWeight: 800, color: 'rgba(250,120,0,1)', letterSpacing: '0.02em' }}>
+                财务数据基于未经确认的估算尺寸 / Financial inputs based on estimated dimensions
+              </span>
+            </div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.6, paddingLeft: 24 }}>
+              Site area, frontage and depth are derived from{' '}
+              <strong style={{ color: 'rgba(250,150,50,0.95)' }}>suburb-average terrain estimates</strong>,
+              not confirmed cadastral or survey data. Any build area, stamp duty, or cost calculations
+              shown here should be treated as preliminary only.
+            </div>
+            {estBuildArea > 0 && (
+              <div style={{
+                marginLeft: 24, padding: '8px 12px',
+                backgroundColor: 'rgba(250,100,0,0.12)',
+                borderRadius: T.r.sm,
+                border: '1px solid rgba(250,100,0,0.2)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              }}>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
+                  Estimated build area (not applied):{' '}
+                  <strong style={{ color: 'rgba(250,150,50,0.95)' }}>
+                    {estBuildArea.toLocaleString()} m&#178;
+                  </strong>
+                </span>
+                <button
+                  onClick={() => {
+                    store.dispatch('finance.buildArea', estBuildArea);
+                    store.dispatch('financeLocks.buildArea', false);
+                    showSync('Build area set to ' + estBuildArea + ' m² — confirm once site dimensions are verified.');
+                  }}
+                  style={{
+                    padding: '4px 12px', borderRadius: 100,
+                    border: '1px solid rgba(250,100,0,0.5)',
+                    background: 'transparent', color: 'rgba(250,150,50,0.95)',
+                    fontSize: '10px', fontWeight: 800, cursor: 'pointer'
+                  }}
+                >
+                  Use anyway
+                </button>
+              </div>
+            )}
+            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', paddingLeft: 24, lineHeight: 1.5 }}>
+              To confirm: upload a{' '}
+              <strong style={{ color: 'rgba(255,255,255,0.6)' }}>Feature &amp; Level Survey Plan</strong>{' '}
+              (most accurate) or{' '}
+              <strong style={{ color: 'rgba(255,255,255,0.6)' }}>VicPlan certificate</strong>{' '}
+              in Document Intelligence &mdash; the warning will clear automatically.
+            </div>
           </div>
         )}
 
@@ -340,13 +412,31 @@ export const FinancePanel = () => {
             {/* Build area with auto-estimate */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <div style={{ fontSize: T.fs.xs, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>
-                  Total Build Area (m²)
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div style={{ fontSize: T.fs.xs, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>
+                    Total Build Area (m²)
+                  </div>
+                  {dimensionsSource && (
+                    <div style={{
+                      fontSize: '9px', fontWeight: 700, letterSpacing: '0.04em',
+                      color: dimensionsSource === 'fsp'      ? '#2ecc71'
+                           : dimensionsSource === 'vicplan'   ? '#00b8d9'
+                           : 'rgba(250,120,0,0.9)'
+                    }}>
+                      {dimensionsSource === 'fsp'     ? '✓ FSP-confirmed'
+                     : dimensionsSource === 'vicplan'  ? '◎ VicPlan cadastre'
+                     : '⚠ Terrain estimate — unconfirmed'}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {site.area > 0 && (
-                    <button onClick={handleAutoEstimateBuildArea} style={{ ...pillStyle, backgroundColor: 'rgba(250,173,20,0.8)' }}>
-                      Auto-estimate
+                    <button
+                      onClick={handleAutoEstimateBuildArea}
+                      title={dimIsEstimated ? 'Site area is an estimate — result will be approximate' : 'Calculate from confirmed site area'}
+                      style={{ ...pillStyle, backgroundColor: dimIsEstimated ? 'rgba(250,100,0,0.6)' : 'rgba(250,173,20,0.8)' }}
+                    >
+                      {dimIsEstimated ? 'Est. area (⚠)' : 'Auto-estimate'}
                     </button>
                   )}
                   <button onClick={() => toggleLock('buildArea')} style={{

@@ -113,12 +113,20 @@ export const SiteInvestigationPanel = () => {
       if (terrainResults.status === 'fulfilled') {
         const r = terrainResults.value;
         if (r.metrics) {
-          store.batchDispatch([
-            { path: 'site.area',     value: r.metrics.landArea },
-            { path: 'site.frontage', value: r.metrics.frontage },
-            { path: 'site.depth',    value: r.metrics.depth    },
-          ]);
           const isEst = r.isEstimate !== false;
+          // Only dispatch dimensions if no FSP-confirmed values already exist.
+          // Never overwrite confirmed FSP dimensions with terrain estimates.
+          const currentSrc = store.getActiveScenario()?.site?.dimensionsSource;
+          const fspLocked  = currentSrc === 'fsp';
+          const dimSrc     = isEst ? 'terrain' : (r.dataSource?.toLowerCase() || 'terrain');
+          store.batchDispatch([
+            ...(!fspLocked ? [
+              { path: 'site.area',            value: r.metrics.landArea },
+              { path: 'site.frontage',         value: r.metrics.frontage },
+              { path: 'site.depth',            value: r.metrics.depth    },
+              { path: 'site.dimensionsSource', value: dimSrc             },
+            ] : []),
+          ]);
           setEstimatedFields({ area: isEst, frontage: isEst, depth: isEst });
         }
         store.dispatch('site.investigation.terrainData', r);

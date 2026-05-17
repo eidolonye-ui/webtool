@@ -28,8 +28,12 @@ export const SovereignConsistencyAuditor = {
     const conflicts = [];
 
     // --- 1. Physical capacity vs. declared build area ---
-    const terrainData = site?.investigation?.terrainData;
-    const siteArea    = Number(site?.area) || 0;
+    // Only meaningful when site dimensions are confirmed (FSP or VicPlan cadastre).
+    // Terrain-estimated dimensions are suburb averages and produce false conflicts.
+    const terrainData    = site?.investigation?.terrainData;
+    const dimensionsSrc  = site?.dimensionsSource;
+    const dimsConfirmed  = dimensionsSrc === 'fsp' || dimensionsSrc === 'vicplan';
+    const siteArea       = Number(site?.area) || 0;
     // Estimate buildable footprint using zone-aware coverage + floor estimate
     const zoneCode    = (planning?.zoneCode || planning?.zone || '').toUpperCase();
     const zd          = getZoneDefaults(zoneCode);
@@ -38,12 +42,12 @@ export const SovereignConsistencyAuditor = {
     const capacity    = Math.round(siteArea * coverage * estFloors * 0.85);
     const userBuild   = Number(finance?.buildArea) || 0;
 
-    if (userBuild > 0 && capacity > 0 && Math.abs(userBuild - capacity) / capacity > 0.25) {
+    if (dimsConfirmed && userBuild > 0 && capacity > 0 && Math.abs(userBuild - capacity) / capacity > 0.25) {
       conflicts.push({
         id:         'CAPACITY_MISMATCH',
         severity:   'danger',
         label:      'Build Area vs. Site Capacity',
-        message:    `Declared build area (${userBuild.toLocaleString()} m²) is more than 25% away from estimated site capacity (${capacity.toLocaleString()} m²).`,
+        message:    `Declared build area (${userBuild.toLocaleString()} m²) is more than 25% away from site capacity (${capacity.toLocaleString()} m²) based on confirmed ${dimensionsSrc.toUpperCase()} dimensions.`,
         suggestion: 'Verify coverage ratio and floor count, or update build area to match physical constraints.'
       });
     }

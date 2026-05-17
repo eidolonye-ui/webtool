@@ -157,14 +157,28 @@ export const PlanningPanel = () => {
     { key: 'hasEMO',  label: 'Erosion Overlay (EMO)',      icon: '⛰️', color: '#92400e' },
   ].filter(o => planning[o.key]);
 
-  const hasS173        = planning.hasS173;
-  const hasCovenant    = planning.hasSingleCovenant;
-  const hasEasement    = planning.hasEasementBoe;
-  const s173Details    = planning.s173Details;
-  const covenantDets   = planning.covenantDetails;
+  const s32Processed           = planning.s32Processed;
+  const hasS173                = planning.hasS173;
+  const hasCovenant            = planning.hasSingleCovenant;
+  const hasRestrictiveCovenant = planning.hasRestrictiveCovenant;
+  const hasEasement            = planning.hasEasementBoe;
+  const hasMortgage            = planning.hasMortgage;
+  const hasMCP                 = planning.hasMCP;
+  const hasPermit              = planning.hasPermit;
+  const s173Details            = planning.s173Details;
+  const covenantDets           = planning.covenantDetails;
+  const restrictiveCovDets     = planning.restrictiveCovenantDesc;
+  const easementDetails        = planning.easementDetails || '';
+  const easementWidthM         = planning.easementWidthM  || '';
+  const permitNo               = planning.permitNo        || '';
   const dealingNumbers = Array.isArray(planning.dealingNumbers) ? planning.dealingNumbers : [];
 
-  const hasExtractionData = zoneCode || overlays.length > 0 || hasS173 || hasCovenant || hasEasement || dealingNumbers.length > 0;
+  const hasExtractionData = zoneCode || overlays.length > 0 || hasS173 || hasCovenant ||
+    hasRestrictiveCovenant || hasEasement || hasPermit || dealingNumbers.length > 0 ||
+    s32Processed;
+
+  // S32 was processed but no covenant of any kind was found — this is critical positive info
+  const s32NoCovenant = s32Processed && !hasCovenant && !hasRestrictiveCovenant && !hasS173;
 
   return (
     <UIPanel
@@ -197,6 +211,30 @@ export const PlanningPanel = () => {
 
             {/* Warnings */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+              {/* ✅ No Covenant — explicitly confirmed by S32 scan */}
+              {s32NoCovenant && (
+                <div style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                  padding: '10px 14px',
+                  backgroundColor: 'rgba(46,204,113,0.09)',
+                  border: '1px solid rgba(46,204,113,0.35)',
+                  borderLeft: '4px solid #2ecc71',
+                  borderRadius: 6,
+                }}>
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>✅</span>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#2ecc71', marginBottom: 3 }}>
+                      No Restrictive Covenant Found on Title
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
+                      The Section 32 Vendor Statement has been scanned and <strong style={{ color: 'rgba(255,255,255,0.85)' }}>no restrictive covenant, single dwelling covenant, or Section 173 agreement</strong> was detected.
+                      This is a positive indicator for development potential — however always confirm independently with your solicitor before proceeding.
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {hasS173 && (
                 <WarnBox
                   icon="📋"
@@ -205,20 +243,99 @@ export const PlanningPanel = () => {
                   color="#7c3aed"
                 />
               )}
-              {hasCovenant && (
-                <WarnBox
-                  icon="🔒"
-                  label="Single Dwelling Covenant"
-                  detail={covenantDets || 'Title contains a single dwelling covenant — subdivision or multi-unit development may be prohibited.'}
-                  color="#dc2626"
-                />
-              )}
+              {(hasCovenant || hasRestrictiveCovenant) && (() => {
+                const raw = covenantDets || restrictiveCovDets || '';
+                const dealingMatch = raw.match(/([A-Z]{1,2}\d{5,8})/);
+                const dealingNo    = dealingMatch ? dealingMatch[1] : null;
+                const isWholeLot   = /whole\s+or\s+part|as\s+to\s+whole/i.test(raw);
+                const isSingleDwg  = hasCovenant || /single\s+dwelling|one\s+dwelling/i.test(raw);
+                const isNoSubdiv   = /no\s+sub.?divis|shall\s+not\s+sub.?divis/i.test(raw);
+                const scopeLabel   = isWholeLot ? 'Whole or part of lot' : 'Scope unspecified';
+                return (
+                  <div style={{ border: '1px solid rgba(220,38,38,0.4)', borderRadius: 6, overflow: 'hidden' }}>
+                    {/* Header */}
+                    <div style={{
+                      padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      backgroundColor: 'rgba(220,38,38,0.12)', borderBottom: '1px solid rgba(220,38,38,0.2)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 14 }}>🔒</span>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: 11, color: '#ff6b6b' }}>
+                            {isSingleDwg ? 'Single Dwelling Covenant' : 'Restrictive Covenant'} — Title Encumbrance
+                          </div>
+                          <div style={{ fontSize: 9, color: 'rgba(255,107,107,0.7)', marginTop: 1 }}>
+                            {isSingleDwg
+                              ? 'Prohibits subdivision or multi-unit development — legal review required'
+                              : 'Restricts use or development of the land — legal review required'}
+                          </div>
+                        </div>
+                      </div>
+                      {dealingNo && (
+                        <span style={{
+                          fontFamily: 'monospace', fontSize: 10, fontWeight: 700,
+                          color: '#94a3b8', backgroundColor: 'rgba(148,163,184,0.08)',
+                          padding: '2px 8px', borderRadius: 4,
+                          border: '1px solid rgba(148,163,184,0.2)', flexShrink: 0
+                        }}>Dealing {dealingNo}</span>
+                      )}
+                    </div>
+                    {/* Parsed details */}
+                    <div style={{ padding: '8px 12px', backgroundColor: 'rgba(220,38,38,0.04)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', gap: 8, fontSize: 10 }}>
+                        <span style={{ minWidth: 75, color: 'rgba(255,255,255,0.35)', fontWeight: 700 }}>Scope</span>
+                        <span style={{ color: '#ff9f7a', fontWeight: 700 }}>{scopeLabel}</span>
+                      </div>
+                      {isSingleDwg && (
+                        <div style={{ display: 'flex', gap: 8, fontSize: 10 }}>
+                          <span style={{ minWidth: 75, color: 'rgba(255,255,255,0.35)', fontWeight: 700 }}>Restriction</span>
+                          <span style={{ color: '#ff9f7a', fontWeight: 700 }}>Single dwelling only — dual-occ and subdivision prohibited</span>
+                        </div>
+                      )}
+                      {isNoSubdiv && !isSingleDwg && (
+                        <div style={{ display: 'flex', gap: 8, fontSize: 10 }}>
+                          <span style={{ minWidth: 75, color: 'rgba(255,255,255,0.35)', fontWeight: 700 }}>Restriction</span>
+                          <span style={{ color: '#ff9f7a', fontWeight: 700 }}>No subdivision permitted under this covenant</span>
+                        </div>
+                      )}
+                      {raw && (
+                        <div style={{ display: 'flex', gap: 8, fontSize: 10, marginTop: 2 }}>
+                          <span style={{ minWidth: 75, color: 'rgba(255,255,255,0.35)', fontWeight: 700, flexShrink: 0 }}>Instrument</span>
+                          <span style={{ color: 'rgba(255,159,122,0.75)', fontStyle: 'italic', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{raw}</span>
+                        </div>
+                      )}
+                      <div style={{ marginTop: 4, padding: '5px 8px', borderRadius: 4, backgroundColor: 'rgba(220,38,38,0.08)', fontSize: 9, color: 'rgba(255,100,80,0.8)', lineHeight: 1.5 }}>
+                        ⚠ Legal advice required — covenants bind future owners and can be removed or varied only via VCAT or Supreme Court application.
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               {hasEasement && (
                 <WarnBox
                   icon="⚠️"
-                  label="Easement Detected"
-                  detail="An easement is registered on title. Verify width and type — this will reduce net developable area."
+                  label={easementWidthM
+                    ? `Easement on Title — ${easementWidthM} m wide`
+                    : 'Easement on Title'}
+                  detail={easementDetails || 'An easement is registered on title. Verify width and type — this will reduce net developable area.'}
                   color="#d97706"
+                />
+              )}
+              {/* hasMortgage deliberately not shown — standard conveyancing, not a planning constraint */}
+              {hasMCP && (
+                <WarnBox
+                  icon="📄"
+                  label="Memorandum of Common Provisions"
+                  detail="A Memorandum of Common Provisions (MCP) is referenced on title — review standard covenants that apply."
+                  color="#0891b2"
+                />
+              )}
+              {hasPermit && (
+                <WarnBox
+                  icon="🏗️"
+                  label={permitNo ? `Planning Permit on Title — ${permitNo}` : 'Planning Permit on Title'}
+                  detail="A planning permit is recorded on title. Review permit conditions — they may impose ongoing obligations."
+                  color="#059669"
                 />
               )}
             </div>

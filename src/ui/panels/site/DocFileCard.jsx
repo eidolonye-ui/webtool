@@ -62,7 +62,73 @@ const VicPlanFindings = ({ fields }) => {
         <Row label="Property Ref"     value={fields.lotRef || fields.propNum} />
         <Row label="Site Area"        value={fields.siteArea ? fields.siteArea + ' m²' : null} />
         {hasS173 && <Row label="S.173 Detail"   value={fields.s173Details?.slice(0, 100)}   color="#ff9f7a" />}
-        {hasCovenant && <Row label="Covenant Detail" value={fields.covenantDetails?.slice(0, 100)} color="#ff9f7a" />}
+        {hasCovenant && (() => {
+          const raw = fields.covenantDetails || fields.restrictiveCovenantDesc || '';
+          // Extract dealing number from raw text (e.g. D151733, AL######)
+          const dealingMatch = raw.match(/([A-Z]{1,2}\d{5,8})/);
+          const dealingNo    = dealingMatch ? dealingMatch[1] : null;
+          // Classify scope
+          const isWholeLot   = /whole\s+or\s+part|as\s+to\s+whole/i.test(raw);
+          const isPartOnly   = /part\s+only|part\s+of\s+the\s+land/i.test(raw) && !isWholeLot;
+          const isSingleDwg  = /single\s+dwelling|one\s+dwelling/i.test(raw);
+          const isNoSubdiv   = /no\s+sub.?divis|shall\s+not\s+sub.?divis/i.test(raw);
+          const scopeLabel   = isWholeLot ? 'Whole or part of lot'
+                             : isPartOnly  ? 'Part of lot only'
+                             : 'Scope unspecified';
+          return (
+            <div style={{
+              marginTop: 4, borderRadius: 5, overflow: 'hidden',
+              border: '1px solid rgba(231,76,60,0.3)'
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: '5px 10px', fontSize: 9, fontWeight: 800,
+                backgroundColor: 'rgba(231,76,60,0.1)',
+                color: '#ff9f7a', letterSpacing: '0.05em', textTransform: 'uppercase',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              }}>
+                <span>Restrictive Covenant — Title Encumbrance</span>
+                {dealingNo && (
+                  <span style={{
+                    fontFamily: 'monospace', fontSize: 10, fontWeight: 700,
+                    color: '#94a3b8', backgroundColor: 'rgba(148,163,184,0.1)',
+                    padding: '1px 6px', borderRadius: 4,
+                    border: '1px solid rgba(148,163,184,0.2)'
+                  }}>Dealing {dealingNo}</span>
+                )}
+              </div>
+              {/* Parsed details */}
+              <div style={{ padding: '7px 10px', display: 'flex', flexDirection: 'column', gap: 3, backgroundColor: 'rgba(231,76,60,0.04)' }}>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', display: 'flex', gap: 6 }}>
+                  <span style={{ minWidth: 80, fontWeight: 700, color: 'rgba(255,255,255,0.35)' }}>Scope</span>
+                  <span style={{ color: '#ff9f7a', fontWeight: 700 }}>{scopeLabel}</span>
+                </div>
+                {isSingleDwg && (
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', display: 'flex', gap: 6 }}>
+                    <span style={{ minWidth: 80, fontWeight: 700, color: 'rgba(255,255,255,0.35)' }}>Restriction</span>
+                    <span style={{ color: '#ff9f7a', fontWeight: 700 }}>Single dwelling only — no dual-occ or subdivision</span>
+                  </div>
+                )}
+                {isNoSubdiv && !isSingleDwg && (
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', display: 'flex', gap: 6 }}>
+                    <span style={{ minWidth: 80, fontWeight: 700, color: 'rgba(255,255,255,0.35)' }}>Restriction</span>
+                    <span style={{ color: '#ff9f7a', fontWeight: 700 }}>No subdivision permitted under this covenant</span>
+                  </div>
+                )}
+                {/* Raw clause — full text, not truncated */}
+                {raw && (
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', display: 'flex', gap: 6, marginTop: 2 }}>
+                    <span style={{ minWidth: 80, fontWeight: 700, color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>Instrument</span>
+                    <span style={{ color: 'rgba(255,159,122,0.75)', fontStyle: 'italic', lineHeight: 1.5 }}>{raw}</span>
+                  </div>
+                )}
+                <div style={{ marginTop: 4, padding: '5px 8px', borderRadius: 4, backgroundColor: 'rgba(231,76,60,0.08)', fontSize: 9, color: 'rgba(255,100,80,0.8)', lineHeight: 1.5 }}>
+                  ⚠ Legal advice required — covenants bind future owners and may restrict development. Confirm whether removal or variation is possible via VCAT or Supreme Court application.
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
       {!zone && overlayLabels.length === 0 && !hasS173 && !hasCovenant && !hasEase && (
         <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
@@ -81,13 +147,34 @@ const Section32Findings = ({ fields }) => {
   const hasEase    = fields.hasEasement;
   return (
     <>
-      {(hasS173 || hasCovenant || hasEase || fields.hasMortgage) && (
+      {/* Covenant / encumbrance chips */}
+      {(hasS173 || hasCovenant || hasEase) && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 2 }}>
           {hasS173     && chip('⚠ S.173 Agreement', 'rgba(231,76,60,0.15)', '#ff6b6b', 'rgba(231,76,60,0.35)')}
-          {hasCovenant && chip('🔒 Covenant', 'rgba(231,76,60,0.15)', '#ff6b6b', 'rgba(231,76,60,0.35)')}
+          {hasCovenant && chip('🔒 Covenant on Title', 'rgba(231,76,60,0.15)', '#ff6b6b', 'rgba(231,76,60,0.35)')}
           {hasEase && chip('Easement' + (fields.easementWidthM ? ' ' + fields.easementWidthM + 'm' : ''),
             'rgba(231,76,60,0.12)', '#ff9f7a', 'rgba(231,76,60,0.3)')}
-          {fields.hasMortgage && chip('Mortgage Registered', 'rgba(250,173,20,0.12)', '#faad14', 'rgba(250,173,20,0.3)')}
+        </div>
+      )}
+
+      {/* ✅ Explicit no-covenant confirmation — only shown when other S32 data was parsed */}
+      {!hasS173 && !hasCovenant && !fields.hasRestrictiveCovenant && (fields.lotRef || fields.councilRates || fields.siteArea) && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '7px 10px',
+          background: 'rgba(46,204,113,0.08)',
+          border: '1px solid rgba(46,204,113,0.3)',
+          borderLeft: '3px solid #2ecc71',
+          borderRadius: 5,
+          marginBottom: 4,
+        }}>
+          <span style={{ fontSize: 13 }}>✅</span>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 800, color: '#2ecc71' }}>No Restrictive Covenant Found</div>
+            <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginTop: 1 }}>
+              S32 scanned — no covenant, S.173 or single-dwelling restriction detected
+            </div>
+          </div>
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -135,9 +222,24 @@ const Section32Findings = ({ fields }) => {
 // ── Rich findings — Feature & Level Survey Plan ────────────────────────────────
 
 const SurveyPlanFindings = ({ fields }) => {
-  const hasEase = fields.hasEasement;
+  // Slope & elevation data
+  const slopeVal = fields.siteSlope != null
+    ? fields.siteSlope + '%' + (fields.slopeDeg != null ? ' (' + fields.slopeDeg + '°)' : '') : null;
+  const elevVal  = fields.elevationDelta != null
+    ? fields.elevationDelta + ' m' + (fields.ahdMin != null && fields.ahdMax != null ? ' (AHD ' + fields.ahdMin + '–' + fields.ahdMax + ')' : '')
+    : null;
+  const frontRear  = fields.frontToRearDelta != null ? fields.frontToRearDelta + ' m F→R' : null;
+  const leftRight  = fields.leftToRightDelta != null ? fields.leftToRightDelta + ' m L→R' : null;
+  const slopeColor = !slopeVal ? 'rgba(255,255,255,0.2)'
+    : parseFloat(fields.siteSlope) > 10 ? '#ff9f7a'
+    : parseFloat(fields.siteSlope) > 5  ? '#faad14' : '#2ecc71';
+
+  // Easements — siteEasements is an array of {type, widthM, boundary, affectedAreaM2, desc}
+  const easements = Array.isArray(fields.siteEasements) ? fields.siteEasements : [];
+
   return (
     <>
+      {/* Dimensions grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
         {[
           { lbl: 'Surveyed Area', val: fields.siteArea,     unit: 'm²' },
@@ -155,10 +257,69 @@ const SurveyPlanFindings = ({ fields }) => {
           </div>
         ))}
       </div>
+
+      {/* Slope & elevation mini-grid */}
+      {(slopeVal || elevVal) && (
+        <div style={{ display: 'grid', gridTemplateColumns: (frontRear || leftRight) ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: 6 }}>
+          {slopeVal && (
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '6px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontWeight: 600, marginBottom: 2 }}>Slope</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: slopeColor }}>{slopeVal}</div>
+            </div>
+          )}
+          {elevVal && (
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '6px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontWeight: 600, marginBottom: 2 }}>Elev. Change</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#60aaff' }}>{elevVal}</div>
+            </div>
+          )}
+          {(frontRear || leftRight) && (
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '6px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontWeight: 600, marginBottom: 2 }}>Directional</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>
+                {[frontRear, leftRight].filter(Boolean).join(' / ')}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Lot ref + single-easement fallback */}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <Row label="Lot / Plan Ref" value={fields.lotRef} color="#00b8d9" />
-        {hasEase && <Row label="Easement" value={(fields.easementDetails || 'Present') + (fields.easementWidthM ? ' · ' + fields.easementWidthM + ' m wide' : '')} color="#ff9f7a" />}
+        {fields.hasEasement && easements.length === 0 && (
+          <Row label="Easement"
+            value={(fields.easementDetails || 'Present') + (fields.easementWidthM ? ' · ' + fields.easementWidthM + ' m wide' : '')}
+            color="#ff9f7a" />
+        )}
       </div>
+
+      {/* Structured easement list from FSP parser */}
+      {easements.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            {easements.length} Easement{easements.length !== 1 ? 's' : ''} on Title
+          </div>
+          {easements.map((e, i) => {
+            const typeLabel    = e.type     || 'Easement';
+            const widthLabel   = e.widthM   ? e.widthM + ' m wide'     : '';
+            const boundaryLabel= e.boundary ? 'along ' + e.boundary    : '';
+            const areaLabel    = e.affectedAreaM2 ? e.affectedAreaM2 + ' m² affected' : '';
+            const parts = [widthLabel, boundaryLabel, areaLabel].filter(Boolean);
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '5px 8px', backgroundColor: 'rgba(255,159,122,0.07)', border: '1px solid rgba(255,159,122,0.2)', borderRadius: 5 }}>
+                <span style={{ fontSize: 9, color: '#ff9f7a', marginTop: 1 }}>⊘</span>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#ff9f7a' }}>{typeLabel}</div>
+                  {parts.length > 0 && <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>{parts.join(' · ')}</div>}
+                  {e.desc && <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 1, fontStyle: 'italic' }}>{e.desc.slice(0, 80)}</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {!fields.siteArea && !fields.siteFrontage && !fields.lotRef && (
         <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
           No dimension data detected — check the file is a Feature &amp; Level Survey Plan with text layer

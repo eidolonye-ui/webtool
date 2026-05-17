@@ -41,12 +41,19 @@ const deriveAverageSetback = (setbacks) => {
 /**
  * Parse easements into the format calculateSovereignYield expects: [{ width: number }]
  * Accepts:
+ *   - an array of FSP objects with { widthM } (normalized here to { width })
  *   - an array of { width } objects (already correct)
  *   - a boolean (hasEasementBoe → assume 2m standard drain easement)
  *   - null / undefined → []
  */
 const parseEasements = (easements, hasEasementBoe) => {
-  if (Array.isArray(easements) && easements.length > 0) return easements;
+  if (Array.isArray(easements) && easements.length > 0) {
+    // Normalize FSP easement objects: { widthM, type, ... } → { width, ... }
+    return easements.map(e => ({
+      ...e,
+      width: typeof e.width === 'number' ? e.width : (parseFloat(e.widthM) || 0),
+    }));
+  }
   if (hasEasementBoe) return [{ width: 2 }]; // 2m standard drain easement
   return [];
 };

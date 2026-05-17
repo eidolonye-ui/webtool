@@ -52,11 +52,16 @@ export const SovereignSyncOrchestrator = {
       footprint * COUPLING_CONFIG.DEFAULT_FLOORS * COUPLING_CONFIG.DEFAULT_EFFICIENCY
     );
 
-    // 2. Check for locks before updating Build Area
-    const shouldUpdateBuildArea = !locks.buildArea && calculatedBuildArea !== finance.buildArea;
-    
-    if (shouldUpdateBuildArea) {
-      console.log(`[SovereignSync] Footprint changed. Updating Build Area to ${calculatedBuildArea}m2.`);
+    // 2. Only auto-write finance.buildArea when the site dimensions are confirmed
+    //    (from an FSP or VicPlan cadastre upload).  When dimensions come from a
+    //    terrain / suburb estimate, we surface the number as a suggestion only —
+    //    the user must consciously accept it to avoid estimated values silently
+    //    feeding financial calculations.
+    const dimensionsSource = scenario.site?.dimensionsSource;   // 'terrain' | 'fsp' | 'vicplan' | null
+    const dimConfirmed     = dimensionsSource === 'fsp' || dimensionsSource === 'vicplan';
+
+    if (dimConfirmed && !locks.buildArea && calculatedBuildArea !== finance.buildArea && calculatedBuildArea > 0) {
+      console.log(`[SovereignSync] Confirmed dims (${dimensionsSource}). Updating Build Area → ${calculatedBuildArea}m².`);
       const tempFinance = { ...finance, buildArea: calculatedBuildArea };
       const results = this.runFinancialPipeline(state, tempFinance);
       if (results) {
@@ -66,7 +71,7 @@ export const SovereignSyncOrchestrator = {
     }
 
     // 3. Risk-to-Cost Coupling (The Sovereign Premium)
-    this.syncRisksToCosts(scenario, synthesis);
+    this.syncRisksToCosts(scenario, synthesis, dimConfirmed, calculatedBuildArea);
   },
 
   /**
@@ -74,19 +79,25 @@ export const SovereignSyncOrchestrator = {
    * Uses terrain slope (from terrainData) and synthesis warnings rather than
    * the non-existent synthesis.alignment object.
    * Instead of forcing values, it updates "suggestions" in the state.
+   *
+   * @param {object}  scenario
+   * @param {object}  synthesis
+   * @param {boolean} dimConfirmed   - true when dimensions come from FSP or VicPlan
+   * @param {number}  estBuildArea   - build-area estimate from footprint * floors
    */
-  syncRisksToCosts(scenario, synthesis) {
+  syncRisksToCosts(scenario, synthesis, dimConfirmed = false, estBuildArea = 0) {
     const terrainData = scenario.site?.investigation?.terrainData;
     const suggestions = {};
 
-    // Slope-driven contingency suggestion
+    // Slope-driven contingency suggestion (terrain data is fine for slope — it's
+    // elevation-derived from OpenTopoData, not extrapolated from suburb stats).
     const maxSlope = terrainData?.slope || terrainData?.metrics?.maxSlope || 0;
     if (maxSlope >= 15) {
       suggestions.contingencyPct  = 12;
-      suggestions.contingencyNote = `Steep slope (${maxSlope.toFixed(1)}%): recommend 12% contingency for retaining and earthworks.`;
+      suggestions.contingencyNote = `Steep terrain slope (${maxSlope.toFixed(1)}%): recommend 12% contingency for retaining walls and earthworks.`;
     } else if (maxSlope >= 8) {
       suggestions.contingencyPct  = 8;
-      suggestions.contingencyNote = `Moderate slope (${maxSlope.toFixed(1)}%): recommend 8% contingency.`;
+      suggestions.contingencyNote = `Moderate terrain slope (${maxSlope.toFixed(1)}%): recommend 8% contingency.`;
     }
 
     // Synthesis implicit-cost warnings → flag premium site works
@@ -103,6 +114,20 @@ export const SovereignSyncOrchestrator = {
     if (surveyedArea > 0 && osmArea > 0 && Math.abs(surveyedArea - osmArea) / surveyedArea > 0.10) {
       suggestions.siteWorksPremium = 25000;
       suggestions.siteWorksNote   = 'Area inconsistency between surveyed and OSM data: suggest +$25k for survey clarification.';
+    }
+
+    // When dimensions are still terrain-estimated (not confirmed), surface the
+    // calculated build area as a suggestion so FinancePanel can show it
+    // prominently without silently writing it to the financial model.
+    if (!dimConfirmed && estBuildArea > 0) {
+      suggestions.estimatedBuildArea     = estBuildArea;
+      suggestions.estimatedBuildAreaNote =
+        'Build area estimate based on unconfirmed terrain dimensions. ' +
+        'Upload a Feature & Level Survey Plan or VicPlan to confirm site area before running financials.';
+    } else {
+      // Clear the estimate suggestion once confirmed dims are available
+      suggestions.estimatedBuildArea     = null;
+      suggestions.estimatedBuildAreaNote = null;
     }
 
     store.dispatch('system.financeSuggestions', suggestions);

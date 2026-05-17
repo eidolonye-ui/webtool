@@ -2,7 +2,7 @@
  * @file domain/finance/live_calc_engine.js
  * @description Real-time financial snapshot for AppShell live preview.
  * Reads from correct store path: state.scenarios[activeId].finance
- * @version 1.5.0 - _prevSnapshots keyed by scenarioId; no cross-scenario delta bleed.
+ * @version 1.6.0 - OTP removed; council contributions (POS+CIL) added to totalCost.
  */
 
 import { store } from '../../core/store/store.js';
@@ -54,11 +54,10 @@ export function getLiveSnapshot() {
   const grvUnits   = Number(market.grvUnits)   || 1;
   const grv        = grvPerUnit * grvUnits;
 
-  // 3. Land + stamp duty (unified via tax_engine)
-  const landPrice  = Number(finance.landPrice)  || 0;
-  const isForeign  = Boolean(finance.isForeign);
-  const isOTP      = Boolean(finance.isOTP);
-  const stampDuty  = landPrice > 0 ? calcVicStampDuty(landPrice, isForeign, isOTP) : 0;
+  // 3. Land + stamp duty (OTP concession removed — invalid for developer purchases since 2017-07-01)
+  const landPrice = Number(finance.landPrice) || 0;
+  const isForeign = Boolean(finance.isForeign);
+  const stampDuty = landPrice > 0 ? calcVicStampDuty(landPrice, isForeign) : 0;
 
   // 4. Construction costs
   const buildArea      = Number(finance.buildArea)      || footprint;
@@ -77,10 +76,19 @@ export function getLiveSnapshot() {
   const seniorDebt      = Math.round((landPrice + constructionCost) * (lvrPct / 100));
   const holdingInterest = Math.round(seniorDebt * (interestRate / 100) * (projectMonths / 12) * 0.5);
 
-  // 6. Total cost
+  // 6. Council contributions (POS + CIL) — mandatory for 3+ dwellings in Melbourne
+  //    POS: % of unimproved land value (varies 2–5% by council)
+  //    CIL: per-dwelling flat fee (varies $2,000–$6,000 by council)
+  const posContributionPct = Number(plan.posContributionPct) || 3;   // default 3%
+  const cilPerUnit         = Number(plan.cilPerUnit)         || 3500; // default $3,500/dwelling
+  const councilContributions = grvUnits >= 3
+    ? Math.round(landPrice * (posContributionPct / 100) + grvUnits * cilPerUnit)
+    : 0;  // no council contribution for <3 dwellings
+
+  // 7. Total cost
   const totalCost = Math.round(
     landPrice + stampDuty + constructionCost + siteWorksCost +
-    legalFees + contingency + holdingInterest
+    legalFees + contingency + holdingInterest + councilContributions
   );
 
   // 7. Profit + margin
@@ -111,28 +119,30 @@ export function getLiveSnapshot() {
   }
 
   // 9. Guard all values before they leave this function
-  const safeFootprint   = safeRound(Math.max(0, footprint));
-  const safeSetbackLoss = safeRound(Math.max(0, setbackLoss));
-  const safeTotalCost   = safeRound(Math.max(0, totalCost));
-  const safeGrv         = safeRound(Math.max(0, grv));
-  const safeProfit      = safeNum(profit);
-  const safeMargin      = safeGrv > 0 ? safeNum((safeProfit / safeTotalCost) * 100) : 0;
-  const safeStampDuty   = safeRound(Math.max(0, stampDuty));
-  const safeIrr         = (irr !== null && Number.isFinite(irr)) ? Math.round(irr * 10) / 10 : null;
-  const safeCapInterest = safeRound(Math.max(0, capInterest));
+  const safeFootprint          = safeRound(Math.max(0, footprint));
+  const safeSetbackLoss        = safeRound(Math.max(0, setbackLoss));
+  const safeTotalCost          = safeRound(Math.max(0, totalCost));
+  const safeGrv                = safeRound(Math.max(0, grv));
+  const safeProfit             = safeNum(profit);
+  const safeMargin             = safeGrv > 0 ? safeNum((safeProfit / safeTotalCost) * 100) : 0;
+  const safeStampDuty          = safeRound(Math.max(0, stampDuty));
+  const safeIrr                = (irr !== null && Number.isFinite(irr)) ? Math.round(irr * 10) / 10 : null;
+  const safeCapInterest        = safeRound(Math.max(0, capInterest));
+  const safeCouncilContribs    = safeRound(Math.max(0, councilContributions));
 
   const results = guardObj({
-    land:        landPrice + safeStampDuty,
-    hard:        constructionCost + siteWorksCost,
-    soft:        legalFees,
-    hold:        holdingInterest,
-    contingency: contingency,
-    total:       safeTotalCost,
-    grv:         safeGrv,
-    profit:      safeProfit,
-    margin:      safeMargin,
-    irr:         safeIrr,
-    capInterest: safeCapInterest,
+    land:               landPrice + safeStampDuty,
+    hard:               constructionCost + siteWorksCost,
+    soft:               legalFees,
+    hold:               holdingInterest,
+    contingency:        contingency,
+    councilContribs:    safeCouncilContribs,
+    total:              safeTotalCost,
+    grv:                safeGrv,
+    profit:             safeProfit,
+    margin:             safeMargin,
+    irr:                safeIrr,
+    capInterest:        safeCapInterest,
   });
 
   // 10. Delta vs. previous snapshot for this specific scenario.

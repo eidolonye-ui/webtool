@@ -1,7 +1,7 @@
 /**
  * @file domain/extraction/parsers.js
  * @description Pure functions for parsing planning and legal documents (VicPlan, Section 32, Feature Survey).
- * @version 2.0.0 - Added parseSurveyPlan; expanded lot/plan reference patterns.
+ * @version 2.1.0 - parseSurveyPlan massively expanded: slope/AHD/aspect/multi-easement/boundary dims.
  */
 
 export const parseVicPlanText = (text) => {
@@ -197,16 +197,37 @@ export const parseSection32Text = (text) => {
   // 1. Extract the ENCUMBRANCES / RESTRICTIONS section
   //    This section contains covenants, easements, caveats, mortgages.
   //    It ends at the next major section heading.
+  //
+  //    OCR-tolerant: separators may be commas, periods, slashes, or just spaces
+  //    (OCR frequently drops or swaps punctuation in all-caps headings).
   // ─────────────────────────────────────────────────────────────────────────
-  const encSectionRx = /(?:ENCUMBRANCES?[,\s]+CAVEATS?[,\s]+AND[,\s]+NOTICES?|ENCUMBRANCES?[,\s]+AND[,\s]+RESTRICTIONS?|RESTRICTIONS?[,\s]+AND[,\s]+ENCUMBRANCES?|PARTICULARS\s+OF\s+ENCUMBRANCES?|ENCUMBRANCES?\s+ON\s+TITLE)/i;
+  const encSectionRx = new RegExp(
+    // Explicit named headings (OCR may replace comma with period/slash/space)
+    'ENCUMBRANCES?[,./\\s]+CAVEATS?[,./\\s]+AND[,./\\s]+NOTICES?' +
+    '|ENCUMBRANCES?[,./\\s]+AND[,./\\s]+RESTRICTIONS?' +
+    '|RESTRICTIONS?[,./\\s]+AND[,./\\s]+ENCUMBRANCES?' +
+    '|PARTICULARS\\s+OF\\s+ENCUMBRANCES?' +
+    '|ENCUMBRANCES?\\s+ON\\s+(?:THE\\s+)?TITLE' +
+    // Shorter fallbacks that appear in some councils' S32 templates
+    '|TITLE\\s+ENCUMBRANCES?' +
+    '|REGISTERED\\s+(?:ENCUMBRANCES?|DEALINGS?)' +
+    '|CHARGES?[,./\\s]+ENCUMBRANCES?[,./\\s]+(?:AND[,./\\s]+)?(?:CAVEATS?|NOTICES?)' +
+    // OCR may run title-section keywords together without punctuation
+    '|ENCUMBRANCESCAVEATS' +
+    '|ENCUMBRANCESANDRESTRICTIONS',
+    'i'
+  );
   let encText = "";
-  const encIdx = tUpper.search(encSectionRx.source ? encSectionRx : new RegExp(encSectionRx.source, 'i'));
+  const encIdx = t.search(encSectionRx);
   if (encIdx !== -1) {
-    // Extract up to 3000 chars; stop at the next ALL-CAPS heading
-    const slice = t.slice(encIdx, encIdx + 3000);
-    const nextHeadingM = slice.slice(100).match(/\n[A-Z][A-Z\s,&]+(?:\n|:)/);
+    // Extract up to 6000 chars (increased from 3000 — long encumbrance sections
+    // with multiple dealings need more space; OCR also adds whitespace).
+    const slice = t.slice(encIdx, encIdx + 6000);
+    // Stop at the next section heading: a line that is ALL-CAPS with ≥4 chars
+    // Allow for OCR noise where headings may be partially lowercase.
+    const nextHeadingM = slice.slice(150).match(/\n[ \t]*[A-Z][A-Z &,\-/]{3,}(?:\n|:|\r)/);
     result.encumbranceSectionText = nextHeadingM
-      ? slice.slice(0, 100 + nextHeadingM.index).trim()
+      ? slice.slice(0, 150 + nextHeadingM.index).trim()
       : slice.trim();
     encText = result.encumbranceSectionText;
     result.hasEncumbrance = encText.length > 20;
@@ -218,18 +239,20 @@ export const parseSection32Text = (text) => {
   // ─────────────────────────────────────────────────────────────────────────
   // 2. Document reference numbers (Victorian title dealings)
   //    D######, A######, T######, AL######, AT######, AF######, AK######, R######
+  //    OCR-tolerant: allow optional spaces within digit run (e.g. "D151 733" → "D151733")
   // ─────────────────────────────────────────────────────────────────────────
-  const docNumRx = /\b([DATRK][0-9]{5,8}|A[LTKF][0-9]{5,8})\b/g;
+  const docNumRx = /\b([DATRK][\s]?[0-9]{2,4}[\s]?[0-9]{2,4}|A[LTKF][\s]?[0-9]{2,4}[\s]?[0-9]{2,4})\b/g;
   const _docNums = [...corpus.matchAll(docNumRx)];
   _docNums.forEach(m => {
-    const n = m[1];
-    if (!result.covenantDocNums.includes(n)) result.covenantDocNums.push(n);
+    const n = m[1].replace(/\s+/g, '');   // collapse OCR spaces
+    if (n.length >= 6 && !result.covenantDocNums.includes(n)) result.covenantDocNums.push(n);
   });
   // Also catch "Dealing No. D151733" / "Instrument No. D151733" formats anywhere in document
-  const dealingNums = [...t.matchAll(/\b(?:Dealing|Instrument|Document|Registration|Reference)\s+No\.?\s*([A-Z]{1,2}\d{5,8})\b/gi)];
+  // and normalise OCR-spaced numbers.
+  const dealingNums = [...t.matchAll(/\b(?:Dealing|Instrument|Document|Registration|Reference)\s+No\.?\s*([A-Z]{1,2}[\s]?\d[\d\s]{4,9})\b/gi)];
   dealingNums.forEach(m => {
-    const n = m[1];
-    if (!result.covenantDocNums.includes(n)) result.covenantDocNums.push(n);
+    const n = m[1].replace(/\s+/g, '');
+    if (n.length >= 6 && !result.covenantDocNums.includes(n)) result.covenantDocNums.push(n);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -246,18 +269,42 @@ export const parseSection32Text = (text) => {
     '|shall\\s+not\\s+erect\\s+any\\s+building\\s+other\\s+than\\s+(?:a\\s+)?(?:private\\s+)?dwelling' +
     '|one\\s+house\\s+only' +
     '|no\\s+more\\s+than\\s+one\\s+(?:private\\s+)?dwelling' +
-    '|one\\s+(?:single\\s+)?(?:private\\s+)?residential\\s+dwelling\\s+only',
+    '|one\\s+(?:single\\s+)?(?:private\\s+)?residential\\s+dwelling\\s+only' +
+    // OCR variants — "only one dwelling" word-order swap
+    '|only\\s+one\\s+(?:private\\s+)?dwelling' +
+    // Covenants that reference dwelling count directly
+    '|limited\\s+to\\s+(?:a\\s+)?(?:single|one)\\s+(?:private\\s+)?dwelling' +
+    '|(?:erect|construct|build)\\s+(?:only\\s+)?one\\s+(?:private\\s+)?dwelling' +
+    // Victorian standard wording in registered dealings
+    '|the\\s+land\\s+shall\\s+not\\s+be\\s+used\\s+for\\s+more\\s+than\\s+one\\s+dwelling' +
+    '|not\\s+more\\s+than\\s+(?:a\\s+)?(?:single|one)\\s+(?:private\\s+)?(?:residential\\s+)?dwelling',
     'i'
   );
 
   const singleDwellingMatch = singleDwellingRx.test(corpus);
   if (singleDwellingMatch) {
     result.hasSingleCovenant = true;
-    const covM = corpus.match(singleDwellingRx);
-    // Expand context around the match
     const matchIdx = corpus.search(singleDwellingRx);
-    const ctx = corpus.slice(Math.max(0, matchIdx - 30), matchIdx + 200);
-    result.covenantDesc = ctx.trim().slice(0, 250);
+    // Walk back to find paragraph/clause start (double-newline or numbered item or dealing header)
+    const lookBack = corpus.slice(Math.max(0, matchIdx - 500), matchIdx);
+    const paraBreak = Math.max(
+      lookBack.lastIndexOf('\n\n'),
+      lookBack.lastIndexOf('\n1.'), lookBack.lastIndexOf('\n2.'), lookBack.lastIndexOf('\n3.'),
+      lookBack.lastIndexOf('\nA.'), lookBack.lastIndexOf('\nB.'),
+      lookBack.lastIndexOf('Covenant'),  // start from 'Covenant' keyword if nearby
+    );
+    const startOff = paraBreak > 0 ? paraBreak : Math.max(0, matchIdx - 80);
+    // Walk forward to find clause end (next paragraph, next numbered item, or 600 chars)
+    const lookForward = corpus.slice(matchIdx, matchIdx + 700);
+    const nextBreak = Math.min(
+      ...([
+        lookForward.indexOf('\n\n'), lookForward.indexOf('\n1.'), lookForward.indexOf('\n2.'),
+        lookForward.indexOf('\nA.'), lookForward.indexOf('\nB.'),
+      ].map(i => (i > 50 ? i : 700))),
+    );
+    const endOff = matchIdx + Math.min(nextBreak, 600);
+    const rawCtx = corpus.slice(Math.max(0, matchIdx - 500) + startOff, endOff);
+    result.covenantDesc = rawCtx.replace(/\s+/g, ' ').trim().slice(0, 600);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -272,15 +319,20 @@ export const parseSection32Text = (text) => {
 
   // ─────────────────────────────────────────────────────────────────────────
   // 5. General restrictive covenant (fallback)
-  //    Also extract covenant description from near D-numbers in encumbrances section
+  //    Also extract covenant description from near D-numbers in encumbrances section.
+  //    Extended patterns: "covenant" may appear without "restrictive" prefix in OCR'd docs.
   // ─────────────────────────────────────────────────────────────────────────
   if (!result.hasSingleCovenant && !result.hasRestrictiveCovenant) {
-    if (/restrictive\s+covenant|registered\s+covenant|restrictive\s+agreement/i.test(corpus)) {
+    if (/restrictive\s+covenant|registered\s+covenant|restrictive\s+agreement|title\s+covenant/i.test(corpus)) {
       result.hasRestrictiveCovenant = true;
     }
-    const covM = corpus.match(/(?:restrictive\s+)?covenant[^.;\n]{0,200}/i);
+    // Bare "covenant" keyword — common in OCR'd dealing descriptions
+    if (!result.hasRestrictiveCovenant && /\bcovenant\b/i.test(corpus)) {
+      result.hasRestrictiveCovenant = true;
+    }
+    const covM = corpus.match(/(?:restrictive\s+)?covenant[^.;\n]{0,500}/i);
     if (covM && !result.covenantDesc) {
-      result.covenantDesc = covM[0].trim().slice(0, 200);
+      result.covenantDesc = covM[0].trim().slice(0, 500);
     }
   }
 
@@ -290,7 +342,8 @@ export const parseSection32Text = (text) => {
     const firstNum = result.covenantDocNums[0];
     const numIdx = encText.indexOf(firstNum);
     if (numIdx !== -1) {
-      result.covenantDesc = encText.slice(numIdx, numIdx + 300).trim();
+      // Grab from the dealing number through 600 chars to capture full clause
+      result.covenantDesc = encText.slice(numIdx, numIdx + 600).replace(/\s+/g, ' ').trim();
     }
   }
 
@@ -415,73 +468,259 @@ export const parseSection32Text = (text) => {
  * @param {string} text - Raw OCR'd or text-layer text from a survey plan PDF
  * @returns {Object|null}
  */
+/**
+ * Parse a Feature & Level Survey Plan (Victorian registered survey).
+ *
+ * Extracts: area, frontage, depth, slope/gradient, AHD elevation delta,
+ * aspect/orientation, all easements (type+width+desc), lot/plan ref,
+ * title vol/folio, survey date, surveyor name, benchmark level.
+ *
+ * OCR-tolerant: handles "m²"/"m2"/"sq m", "AHD"/"RL" spot heights,
+ * bare boundary dimension strings, gradient ratios and percentage labels.
+ *
+ * @param {string} text - Raw OCR or native text from the survey plan PDF
+ * @returns {Object|null}
+ */
 export const parseSurveyPlan = (text) => {
   if (!text || !text.trim()) return null;
   const t = text.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
 
   const result = {
-    area:          null,  // number, m²
-    frontage:      null,  // number, metres
-    depth:         null,  // number, metres
-    lot:           "",
-    hasEasement:   false,
-    easementDesc:  "",
-    easementWidthM: "",
+    area:              null,
+    frontage:          null,
+    depth:             null,
+    slopePercent:      null,
+    slopeDeg:          null,
+    elevationDeltaM:   null,
+    ahd_min:           null,
+    ahd_max:           null,
+    frontToRearDeltaM: null,   // AHD height diff front → rear boundary
+    leftToRightDeltaM: null,   // AHD height diff left → right boundary (cross-fall)
+    aspect:            "",
+    lot:               "",
+    titleVolume:       "",
+    titleFolio:        "",
+    surveyDate:        "",
+    surveyorName:      "",
+    hasEasement:       false,
+    easementDesc:      "",
+    easementWidthM:    "",
+    easements:         [],
+    boundaries:        [],
+    bmLevel:           null,
   };
 
-  /* 1. LOT AREA — various formats used by surveyors */
-  const areaM =
-    t.match(/(?:lot\s+area|site\s+area|total\s+area|area)[:\s=]+(\d[\d,]*\.?\d*)\s*m[²2]/i) ||
-    t.match(/(?:lot\s+area|site\s+area|area)[:\s=]+(\d[\d,]*\.?\d*)\s*sq\.?\s*m/i)          ||
-    t.match(/(?:lot\s+area|area)[:\s=]+(\d[\d,]*\.?\d*)\s*(?:ha|hectares?)/i)                ||
-    // Standalone "450.50 m²" — require at least 3 digits to avoid dimension line false positives
-    t.match(/(\d{3,}\.?\d*)\s*m[²2]/i);
-  if (areaM) {
-    let raw = areaM[1].replace(/,/g, "");
-    if (/ha|hectares?/i.test(areaM[0])) raw = String(Math.round(parseFloat(raw) * 10000));
-    result.area = parseFloat(raw);
+  // 1. LOT AREA
+  const areaPatterns = [
+    /(?:lot\s+area|site\s+area|total\s+area|area\s+of\s+lot)[:\s=]+(\d[\d,]*\.?\d*)\s*(?:m[²2]|sq\.?\s*m(?:etres?)?)/i,
+    /(?:lot\s+area|area)[:\s=]+(\d[\d,]*\.?\d*)\s*(?:ha|hectares?)/i,
+    /(?:lot\s+area|site\s+area|area)[:\s=]+(\d[\d,]*\.?\d*)/i,
+    /\b(\d{3,5}\.?\d{0,2})\s*m[²2]\b/i,
+    /\b(\d{3,5}\.?\d{0,2})\s*sq\.?\s*m\b/i,
+  ];
+  for (const rx of areaPatterns) {
+    const m = t.match(rx);
+    if (m) {
+      let raw = m[1].replace(/,/g, "");
+      if (/ha|hectares?/i.test(m[0])) raw = String(Math.round(parseFloat(raw) * 10000));
+      const v = parseFloat(raw);
+      if (v > 50 && v < 100000) { result.area = v; break; }
+    }
   }
 
-  /* 2. FRONTAGE — explicit label preferred */
-  const frontageM =
-    t.match(/(?:road\s+)?frontage\s+to\s+[A-Za-z\s''-]{3,40}[:\s]+(\d+\.?\d*)\s*m?/i) ||
-    t.match(/frontage[:\s=]+(\d+\.?\d*)\s*m?/i);
-  if (frontageM) result.frontage = parseFloat(frontageM[1]);
+  // 2. FRONTAGE — explicit labels
+  const frontagePatterns = [
+    /(?:road\s+)?frontage\s+to\s+[A-Za-z][A-Za-z\s''\-]{2,40}[:\s]+(\d+\.?\d*)\s*m/i,
+    /frontage[:\s=]+(\d+\.?\d*)\s*m/i,
+    /front\s+boundary[:\s=]+(\d+\.?\d*)\s*m/i,
+    /width[:\s=]+(\d+\.?\d*)\s*m/i,
+  ];
+  for (const rx of frontagePatterns) {
+    const m = t.match(rx);
+    if (m) { result.frontage = parseFloat(m[1]); break; }
+  }
 
-  /* 3. DEPTH — explicit label preferred */
-  const depthM =
-    t.match(/(?:average\s+)?depth\s+to\s+rear[:\s=]+(\d+\.?\d*)\s*m?/i) ||
-    t.match(/(?:average\s+)?depth[:\s=]+(\d+\.?\d*)\s*m?/i);
-  if (depthM) result.depth = parseFloat(depthM[1]);
+  // 3. DEPTH — explicit labels
+  const depthPatterns = [
+    /(?:average\s+)?depth\s+to\s+rear[:\s=]+(\d+\.?\d*)\s*m/i,
+    /(?:average\s+)?depth[:\s=]+(\d+\.?\d*)\s*m/i,
+    /rear\s+(?:to\s+front|boundary)[:\s=]+(\d+\.?\d*)\s*m/i,
+    /length[:\s=]+(\d+\.?\d*)\s*m/i,
+  ];
+  for (const rx of depthPatterns) {
+    const m = t.match(rx);
+    if (m) { result.depth = parseFloat(m[1]); break; }
+  }
 
-  /* 4. INFER depth from area/frontage if missing (area = frontage × depth) */
+  // 4. BOUNDARY DIMENSIONS — collect all surveyor decimal values (e.g. "15.240", "42.685")
+  const dims = [];
+  for (const m of t.matchAll(/\b(\d{1,3}\.\d{2,3})\b/g)) {
+    const v = parseFloat(m[1]);
+    if (v > 3 && v < 200) dims.push(v);
+  }
+  result.boundaries = [...new Set(dims.map(v => parseFloat(v.toFixed(3))))].sort((a, b) => a - b);
+
+  // Infer frontage + depth from boundary pair whose product best matches area
+  if (!result.frontage && !result.depth && result.boundaries.length >= 2 && result.area) {
+    const s = result.boundaries.slice();
+    let bestDiff = Infinity;
+    for (let i = 0; i < s.length; i++) {
+      for (let j = i; j < s.length; j++) {
+        const diff = Math.abs(s[i] * s[j] - result.area);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          result.frontage = s[i];
+          result.depth    = s[j];
+        }
+      }
+    }
+    if (bestDiff / result.area > 0.2) { result.frontage = null; result.depth = null; }
+  }
+
+  // 5. INFER depth from area/frontage or vice-versa
   if (result.area && result.frontage && !result.depth && result.frontage > 0) {
-    const inferred = result.area / result.frontage;
-    if (inferred > 5 && inferred < 300) result.depth = parseFloat(inferred.toFixed(1));
+    const v = result.area / result.frontage;
+    if (v > 5 && v < 300) result.depth = parseFloat(v.toFixed(2));
+  }
+  if (result.area && result.depth && !result.frontage && result.depth > 0) {
+    const v = result.area / result.depth;
+    if (v > 3 && v < 100) result.frontage = parseFloat(v.toFixed(2));
   }
 
-  /* 5. LOT/PLAN REFERENCE */
+  // 6. AHD SPOT HEIGHTS — collect all, compute elevation delta
+  // Formats: "AHD 52.350", "52.35 AHD", "RL 52.35", "52.350 RL", "BM 53.120 AHD"
+  const ahdVals = [];
+  for (const m of t.matchAll(/(?:(?:AHD|RL|BM)\s+(\d{1,3}\.\d{2,4})|(\d{1,3}\.\d{2,4})\s+(?:AHD|RL))/gi)) {
+    const v = parseFloat(m[1] || m[2]);
+    if (!isNaN(v) && v > -10 && v < 1500) ahdVals.push(v);
+  }
+  if (ahdVals.length >= 2) {
+    result.ahd_min         = Math.min(...ahdVals);
+    result.ahd_max         = Math.max(...ahdVals);
+    result.elevationDeltaM = parseFloat((result.ahd_max - result.ahd_min).toFixed(2));
+    const sortedAhd = [...ahdVals].sort((a, b) => a - b);
+    result.bmLevel = sortedAhd[Math.floor(sortedAhd.length / 2)];
+  } else if (ahdVals.length === 1) {
+    result.bmLevel = ahdVals[0];
+  }
+
+  // 6b. DIRECTIONAL AHD — infer front→rear and left→right elevation deltas
+  //     Scan ±150 chars around each AHD value for boundary-direction keywords
+  {
+    const dirAHD = { front: null, rear: null, left: null, right: null };
+    for (const m of t.matchAll(/(?:(?:AHD|RL|BM)\s+(\d{1,3}\.\d{2,4})|(\d{1,3}\.\d{2,4})\s+(?:AHD|RL))/gi)) {
+      const v = parseFloat(m[1] || m[2]);
+      if (isNaN(v) || v <= -10 || v >= 1500) continue;
+      const ctx = t.slice(Math.max(0, m.index - 150), m.index + m[0].length + 150).toLowerCase();
+      if (dirAHD.front === null && /\b(front|road[\s-]boundary|street[\s-]boundary|frontage)\b/.test(ctx)) dirAHD.front = v;
+      else if (dirAHD.rear === null  && /\b(rear|back[\s-]boundary)\b/.test(ctx))                         dirAHD.rear  = v;
+      else if (dirAHD.left === null  && /\b(left[\s-]?(?:side|boundary)?)\b/.test(ctx))                  dirAHD.left  = v;
+      else if (dirAHD.right === null && /\b(right[\s-]?(?:side|boundary)?)\b/.test(ctx))                 dirAHD.right = v;
+    }
+    if (dirAHD.front !== null && dirAHD.rear !== null)
+      result.frontToRearDeltaM = parseFloat(Math.abs(dirAHD.front - dirAHD.rear).toFixed(2));
+    if (dirAHD.left !== null && dirAHD.right !== null)
+      result.leftToRightDeltaM = parseFloat(Math.abs(dirAHD.left - dirAHD.right).toFixed(2));
+  }
+
+  // 7. SLOPE / GRADIENT
+  const slopePctM = t.match(/(?:slope|gradient|grade|fall)[:\s]+(\d+\.?\d*)\s*%/i) ||
+                    t.match(/(?:slope|gradient)\s+(?:approx\.?\s+)?(\d+\.?\d*)\s*%/i);
+  if (slopePctM) {
+    result.slopePercent = parseFloat(slopePctM[1]);
+    result.slopeDeg     = parseFloat((Math.atan(result.slopePercent / 100) * (180 / Math.PI)).toFixed(1));
+  }
+  const ratioM = t.match(/(?:slope|gradient|grade|fall)[:\s]+1[:\s/](\d+\.?\d*)/i) ||
+                 t.match(/1\s+in\s+(\d+\.?\d*)\s+(?:fall|rise|slope|grade)/i);
+  if (!result.slopePercent && ratioM) {
+    const ratio = parseFloat(ratioM[1]);
+    if (ratio > 0) {
+      result.slopePercent = parseFloat((100 / ratio).toFixed(1));
+      result.slopeDeg     = parseFloat((Math.atan(1 / ratio) * (180 / Math.PI)).toFixed(1));
+    }
+  }
+  // Derive from AHD delta / depth
+  if (!result.slopePercent && result.elevationDeltaM != null && result.depth && result.depth > 0) {
+    result.slopePercent = parseFloat(((result.elevationDeltaM / result.depth) * 100).toFixed(1));
+    result.slopeDeg     = parseFloat((Math.atan(result.elevationDeltaM / result.depth) * (180 / Math.PI)).toFixed(1));
+  }
+
+  // 8. ASPECT / ORIENTATION (front boundary cardinal direction)
+  const aspectM =
+    t.match(/(?:north|south|east|west|NE|NW|SE|SW)[ern\s-]*(?:facing|aspect|boundary|frontage|exposure)/i) ||
+    t.match(/(?:faces?\s+(?:the\s+)?(?:north|south|east|west|NE|NW|SE|SW))/i) ||
+    t.match(/(?:frontage|road)\s+(?:on\s+)?(?:the\s+)?(?:north|south|east|west|NE|NW|SE|SW)(?:ern)?\s+side/i);
+  if (aspectM) {
+    const dir = aspectM[0].match(/(north(?:east|west)?|south(?:east|west)?|east|west|NE|NW|SE|SW)/i)?.[1];
+    if (dir) result.aspect = dir.charAt(0).toUpperCase() + dir.slice(1).toLowerCase();
+  }
+
+  // 9. EASEMENTS — collect ALL mentions (multiple easements supported)
+  for (const m of t.matchAll(/(?:easement[^.\n]{0,200}|[A-Z]{1,2}-\d\s+[A-Za-z\s]{3,40}easement[^.\n]{0,100})/gi)) {
+    const raw = m[0].trim().slice(0, 200);
+
+    // Width — try metres first, then links (historic Victorian survey unit)
+    let widthM = "";
+    const wm = raw.match(/(\d+\.?\d*)\s*m(?:etre|eter)?s?\b/i);
+    if (wm) {
+      widthM = wm[1];
+    } else {
+      const wl = raw.match(/(\d+\.?\d*)\s*links?/i);
+      if (wl) widthM = String((parseFloat(wl[1]) * 0.201168).toFixed(2));
+    }
+
+    // Easement type
+    const typeM = raw.match(/(?:for\s+)?(\w+(?:\s+\w+)?)\s+(?:purposes?|easement)/i);
+    const type  = typeM ? typeM[1].trim() : 'General';
+
+    // Boundary position — which edge of the lot does this easement run along?
+    const bdryM = raw.match(/\b(rear|front|left[\s-]?(?:side)?|right[\s-]?(?:side)?|north(?:ern)?|south(?:ern)?|east(?:ern)?|west(?:ern)?)\s+(?:boundary|line)\b/i)
+                || raw.match(/\balong\s+(?:the\s+)?(rear|front|left|right|north(?:ern)?|south(?:ern)?|east(?:ern)?|west(?:ern)?)\b/i);
+    const boundary = bdryM ? bdryM[1].toLowerCase().replace(/ern$/, '').trim() : '';
+
+    result.easements.push({ type, widthM, boundary, desc: raw.slice(0, 150), affectedAreaM2: null });
+    result.hasEasement = true;
+    if (!result.easementDesc) {
+      result.easementDesc   = raw.slice(0, 150);
+      result.easementWidthM = widthM;
+    }
+  }
+
+  // 9b. AFFECTED AREA — compute per easement once frontage+depth are known
+  result.easements.forEach(e => {
+    if (!e.widthM || !e.boundary) return;
+    const w   = parseFloat(e.widthM);
+    if (isNaN(w) || w <= 0) return;
+    const bnd = e.boundary.toLowerCase();
+    // rear/front easements run parallel to frontage  → area = width × frontage
+    if ((bnd === 'rear' || bnd === 'front') && result.frontage) {
+      e.affectedAreaM2 = parseFloat((w * result.frontage).toFixed(1));
+    }
+    // left/right/side easements run parallel to depth → area = width × depth
+    else if ((bnd === 'left' || bnd === 'right' || bnd === 'side') && result.depth) {
+      e.affectedAreaM2 = parseFloat((w * result.depth).toFixed(1));
+    }
+  });
+
+  // 10. LOT / PLAN REFERENCE
   const lotM = t.match(/Lot\s+(\d+[A-Z]?)\s+(?:on\s+)?(?:PS|LP|TP|SP|CP|DP)\s*(\d+[A-Z]?)/i);
   if (lotM) {
     const planType = lotM[0].match(/\b(PS|LP|TP|SP|CP|DP)\b/i)?.[1]?.toUpperCase() || 'PS';
     result.lot = `Lot ${lotM[1].toUpperCase()} on ${planType}${lotM[2].toUpperCase()}`;
   }
 
-  /* 6. EASEMENTS on plan */
-  const eMatches = [...t.matchAll(/easement[^.\n]{0,150}/gi)];
-  if (eMatches.length) {
-    result.hasEasement = true;
-    result.easementDesc = eMatches[0][0].trim().slice(0, 120);
-    // Width in metres
-    const widthM = eMatches[0][0].match(/(\d+\.?\d*)\s*m(?:etre|eter)?s?\b/i);
-    if (widthM) {
-      result.easementWidthM = widthM[1];
-    } else {
-      // Convert from links (old survey plans: 1 link = 0.201168 m)
-      const widthLinks = eMatches[0][0].match(/(\d+\.?\d*)\s*links?/i);
-      if (widthLinks) result.easementWidthM = String((parseFloat(widthLinks[1]) * 0.201168).toFixed(2));
-    }
-  }
+  // 11. TITLE REFERENCE
+  const ctM = t.match(/(?:Volume|Vol\.?)\s+(\d+)\s+(?:Folio|Fol\.?)\s+(\d+)/i);
+  if (ctM) { result.titleVolume = ctM[1]; result.titleFolio = ctM[2]; }
+
+  // 12. SURVEY DATE
+  const dateM = t.match(/(?:date[d]?|surveyed)[:\s]+(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4})/i) ||
+                t.match(/\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{4})\b/);
+  if (dateM) result.surveyDate = dateM[1];
+
+  // 13. SURVEYOR NAME
+  const survM = t.match(/(?:registered\s+surveyor|land\s+surveyor|surveyed\s+by)[:\s]+([A-Z][A-Za-z\s.]{3,40})/i);
+  if (survM) result.surveyorName = survM[1].trim().slice(0, 60);
 
   return result;
 };

@@ -49,6 +49,15 @@ export const FIELD_TO_PATH = {
   siteArea:             'site.area',
   siteFrontage:         'site.frontage',
   siteDepth:            'site.depth',
+  dimensionsSource:     'site.dimensionsSource', // 'terrain' | 'fsp' | 'vicplan' | 'manual'
+
+  // Physical site conditions (from Feature & Level Survey Plan)
+  siteSlope:            'physical.slope',            // slope % derived from AHD or explicit label
+  siteAspect:           'physical.aspect',           // cardinal direction front faces
+  elevationDelta:       'physical.elevationDelta',   // max AHD − min AHD (metres)
+  siteBmLevel:          'site.investigation.bmLevel',// benchmark RL datum (informational)
+  surveyDate:           'site.investigation.surveyDate',
+  surveyorName:         'site.investigation.surveyorName',
 
   // Admin / reference
   lotRef:               'planning.lotRef',           // dynamic
@@ -68,6 +77,30 @@ export const FIELD_TO_PATH = {
   servicesGas:          'planning.servicesGas',        // dynamic
   servicesWater:        'planning.servicesWater',      // dynamic
   servicesSewer:        'planning.servicesSewer',      // dynamic
+
+  // ── VicPlan-specific ──────────────────────────────────────────────────────
+  siteAddress:          'site.address',
+  bushfireZone:         'planning.bushfireZone',
+  nativeVeg:            'planning.nativeVeg',
+  propnum:              'planning.propnum',
+
+  // ── S32-specific ──────────────────────────────────────────────────────────
+  hasRestrictiveCovenant:  'planning.hasRestrictiveCovenant',
+  restrictiveCovenantDesc: 'planning.restrictiveCovenantDesc',
+  hasMCP:               'planning.hasMCP',
+  landTaxAmt:           'planning.landTaxAmt',
+  servicesTel:          'planning.servicesTel',
+  hasPermit:            'planning.hasPermit',
+  permitNo:             'planning.permitNo',
+  s32Processed:         'planning.s32Processed',  // always true once S32 is parsed
+
+  // ── FSP-specific ───────────────────────────────────────────────────────────
+  ahdMin:               'physical.ahdMin',
+  ahdMax:               'physical.ahdMax',
+  slopeDeg:             'physical.slopeDeg',
+  frontToRearDelta:     'physical.frontToRearDelta',   // front→rear AHD height diff (m)
+  leftToRightDelta:     'physical.leftToRightDelta',   // left→right cross-fall (m)
+  siteEasements:        'physical.siteEasements',      // enriched array with boundary + affectedAreaM2
 
   // Analysis
   keyRisks:             'site.investigation.keyRisks',
@@ -100,6 +133,13 @@ export const FIELD_LABELS = {
   siteArea:             'Surveyed Lot Area (m²)',
   siteFrontage:         'Lot Frontage (m)',
   siteDepth:            'Lot Depth (m)',
+  siteSlope:            'Site Slope (%)',
+  siteAspect:           'Site Aspect / Orientation',
+  elevationDelta:       'Elevation Change (m)',
+  siteEasements:        'Easements (all)',
+  siteBmLevel:          'Survey Benchmark (RL)',
+  surveyDate:           'Survey Date',
+  surveyorName:         'Surveyor',
   lotRef:               'Lot / Plan Reference',
   titleVolume:          'Title Volume',
   titleFolio:           'Title Folio',
@@ -111,6 +151,24 @@ export const FIELD_LABELS = {
   servicesGas:          'Gas Connected',
   servicesWater:        'Water Connected',
   servicesSewer:        'Sewer Connected',
+  // VicPlan
+  siteAddress:          'Property Address',
+  bushfireZone:         'Bushfire Prone Area',
+  nativeVeg:            'Native Vegetation',
+  propnum:              'Property Number',
+  // S32
+  hasRestrictiveCovenant:  'Restrictive Covenant',
+  restrictiveCovenantDesc: 'Restrictive Covenant Details',
+  hasMCP:               'Memorandum of Common Provisions',
+  landTaxAmt:           'Land Tax ($/yr)',
+  servicesTel:          'Telephone / NBN Connected',
+  hasPermit:            'Planning Permit on Title',
+  permitNo:             'Permit Number',
+  // FSP
+  ahdMin:               'AHD Min Spot Height (m)',
+  ahdMax:               'AHD Max Spot Height (m)',
+  slopeDeg:             'Site Slope (degrees)',
+  // Analysis
   keyRisks:             'Key Risk Factors',
   summary:              'Document Summary',
 };
@@ -133,13 +191,28 @@ export const normalizeVicPlanResult = (vpResult, aiResult) => {
   if (vpResult) {
     if (vpResult.zone)    fields.zoneCode    = vpResult.zone.trim();
     if (vpResult.council) fields.councilName = vpResult.council.trim();
-    if (vpResult.area)    fields.siteArea    = parseFloat(vpResult.area) || null;
+    if (vpResult.area) {
+      fields.siteArea = parseFloat(vpResult.area) || null;
+      // VicPlan area is cadastre-grade — better than terrain estimate, but FSP takes priority
+      fields.dimensionsSource = 'vicplan';
+    }
     if (vpResult.lot)     fields.lotRef      = vpResult.lot;
+    if (vpResult.address) fields.siteAddress = vpResult.address.trim();
+    if (vpResult.propnum) fields.propnum     = vpResult.propnum.trim();
+    if (vpResult.bushfire) fields.bushfireZone = vpResult.bushfire.trim();
+    if (vpResult.nativeVeg) fields.nativeVeg  = vpResult.nativeVeg.trim();
 
     // Overlay flags from the specialised parser
     if (Array.isArray(vpResult.overlays)) {
-      vpResult.overlays.forEach(({ flag }) => { if (flag) fields[flag] = true; });
+      vpResult.overlays.forEach(({ flag, label }) => {
+        if (flag) fields[flag] = true;
+      });
+      // Build overlayLabels array from parsed overlay labels (supplemented later by ai_adapter schedule numbers)
+      if (vpResult.overlays.length && !vpResult.overlaysConfirmedNone) {
+        fields.overlayLabels = vpResult.overlays.map(o => o.label);
+      }
     }
+    if (vpResult.overlaysConfirmedNone) fields.overlayLabels = [];
   }
 
   // Supplement with ai_adapter for things parsers.js doesn't cover
@@ -188,6 +261,9 @@ export const normalizeS32Result = (s32Result, aiResult) => {
   const fields = {};
 
   if (s32Result) {
+    // Always mark S32 as processed — even if no covenant found, the absence is important
+    fields.s32Processed = true;
+
     if (s32Result.hasSingleCovenant) fields.hasSingleCovenant  = true;
     if (s32Result.hasEasement) {
       fields.hasEasement   = true;
@@ -220,10 +296,35 @@ export const normalizeS32Result = (s32Result, aiResult) => {
     if (s32Result.servicesGas)   fields.servicesGas   = s32Result.servicesGas;
     if (s32Result.servicesWater) fields.servicesWater = s32Result.servicesWater;
     if (s32Result.servicesSewer) fields.servicesSewer = s32Result.servicesSewer;
+    // Dealing numbers (D######, AL######, etc.)
+    if (s32Result.covenantDocNums?.length) fields.dealingNumbers = s32Result.covenantDocNums;
+
+    // Restrictive covenant (non-single-dwelling)
+    if (s32Result.hasRestrictiveCovenant) {
+      fields.hasRestrictiveCovenant = true;
+      if (s32Result.restrictiveCovenantDesc) fields.restrictiveCovenantDesc = s32Result.restrictiveCovenantDesc;
+    }
+
+    // MCP
+    if (s32Result.hasMCP) fields.hasMCP = true;
+
+    // Services — telephone
+    if (s32Result.servicesTel) fields.servicesTel = s32Result.servicesTel;
+
+    // Outgoings — land tax
+    if (s32Result.landTaxAmt) {
+      const lt = parseFloat(s32Result.landTaxAmt);
+      if (!isNaN(lt) && lt > 0) fields.landTaxAmt = lt;
+    }
+
+    // Planning permit on title
+    if (s32Result.hasPermit) {
+      fields.hasPermit = true;
+      if (s32Result.permitNo) fields.permitNo = s32Result.permitNo;
+    }
+
     // Vendor name (display only — not dispatched to store, just shown in badge)
-    if (s32Result.vendorName)    fields._vendorName   = s32Result.vendorName;
-    // Planning permit
-    if (s32Result.hasPermit)     fields._permitNo     = s32Result.permitNo || 'Yes';
+    if (s32Result.vendorName) fields._vendorName = s32Result.vendorName;
   }
 
   // Supplement from ai_adapter
@@ -254,140 +355,111 @@ export const normalizeS32Result = (s32Result, aiResult) => {
  */
 export const normalizeSurveyResult = (surveyResult) => {
   const fields = {};
+  const facts  = [];
 
   if (surveyResult) {
+    // ── Dimensions ─────────────────────────────────────────────────────────────
+    // FSP is the highest-priority source — always overrides terrain estimates.
+    // Once dimensionsSource is set to 'fsp', SiteInvestigationPanel won't overwrite.
+    const hasFspDims = (surveyResult.area > 0) || (surveyResult.frontage > 0) || (surveyResult.depth > 0);
     if (surveyResult.area     != null && surveyResult.area     > 0) fields.siteArea     = surveyResult.area;
     if (surveyResult.frontage != null && surveyResult.frontage > 0) fields.siteFrontage = surveyResult.frontage;
     if (surveyResult.depth    != null && surveyResult.depth    > 0) fields.siteDepth    = surveyResult.depth;
-    if (surveyResult.lot)     fields.lotRef        = surveyResult.lot;
+    if (hasFspDims) fields.dimensionsSource = 'fsp'; // lock future terrain overwrites
+
+    // ── Physical conditions ───────────────────────────────────────────────────
+    if (surveyResult.slopePercent != null) {
+      fields.siteSlope = surveyResult.slopePercent;
+      const deg = surveyResult.slopeDeg != null ? ` (${surveyResult.slopeDeg}°)` : '';
+      facts.push(`Site slope: ${surveyResult.slopePercent}%${deg}`);
+    }
+    if (surveyResult.aspect) {
+      fields.siteAspect = surveyResult.aspect;
+      facts.push(`Site aspect: ${surveyResult.aspect}-facing`);
+    }
+    if (surveyResult.elevationDeltaM != null) {
+      fields.elevationDelta = surveyResult.elevationDeltaM;
+      facts.push(`Elevation change across site: ${surveyResult.elevationDeltaM}m (AHD ${surveyResult.ahd_min}–${surveyResult.ahd_max})`);
+    }
+    if (surveyResult.ahd_min != null) fields.ahdMin = surveyResult.ahd_min;
+    if (surveyResult.ahd_max != null) fields.ahdMax = surveyResult.ahd_max;
+    if (surveyResult.bmLevel != null) fields.siteBmLevel = surveyResult.bmLevel;
+    if (surveyResult.slopeDeg != null) {
+      fields.slopeDeg = surveyResult.slopeDeg;
+      facts.push(`Slope: ${surveyResult.slopePercent}% (${surveyResult.slopeDeg}°)`);
+    }
+
+    // ── Directional elevation deltas (from labelled AHD corner heights) ───────
+    if (surveyResult.frontToRearDeltaM != null) {
+      fields.frontToRearDelta = surveyResult.frontToRearDeltaM;
+      const depth = surveyResult.depth;
+      facts.push(
+        `Front-to-rear slope: ${surveyResult.frontToRearDeltaM}m height difference` +
+        (depth ? ` over ${depth}m depth` : '')
+      );
+    }
+    if (surveyResult.leftToRightDeltaM != null) {
+      fields.leftToRightDelta = surveyResult.leftToRightDeltaM;
+      const label = surveyResult.leftToRightDeltaM < 0.3 ? 'relatively flat cross-fall'
+                  : surveyResult.leftToRightDeltaM < 0.8 ? 'minor cross-fall'
+                  : 'notable cross-fall';
+      facts.push(`Left-to-right: ${surveyResult.leftToRightDeltaM}m ${label}`);
+    }
+
+    // ── Easements ─────────────────────────────────────────────────────────────
     if (surveyResult.hasEasement) {
-      fields.hasEasement    = true;
+      fields.hasEasement = true;
       if (surveyResult.easementDesc)   fields.easementDetails = surveyResult.easementDesc;
       if (surveyResult.easementWidthM) fields.easementWidthM  = surveyResult.easementWidthM;
+      // Full enriched easement array (boundary + affectedAreaM2 per entry)
+      if (surveyResult.easements?.length) {
+        fields.siteEasements = surveyResult.easements;
+        surveyResult.easements.forEach(e => {
+          let fact = `Easement: ${e.type}`;
+          if (e.widthM)        fact += ` — ${e.widthM}m wide`;
+          if (e.boundary)      fact += ` along ${e.boundary} boundary`;
+          if (e.affectedAreaM2 != null) fact += ` (~${e.affectedAreaM2}m² affected)`;
+          facts.push(fact);
+        });
+      }
     }
+
+    // ── Reference / admin ─────────────────────────────────────────────────────
+    if (surveyResult.lot)          fields.lotRef       = surveyResult.lot;
+    if (surveyResult.titleVolume)  fields.titleVolume  = surveyResult.titleVolume;
+    if (surveyResult.titleFolio)   fields.titleFolio   = surveyResult.titleFolio;
+    if (surveyResult.surveyDate)   fields.surveyDate   = surveyResult.surveyDate;
+    if (surveyResult.surveyorName) fields.surveyorName = surveyResult.surveyorName;
   }
 
   const hasData    = Object.keys(fields).length > 0;
-  const confidence = hasData ? (fields.siteArea && fields.siteFrontage ? 85 : 65) : 40;
+  const confidence = hasData
+    ? (fields.siteArea && fields.siteFrontage && fields.siteDepth ? 92
+       : fields.siteArea && fields.siteFrontage ? 85
+       : fields.siteArea ? 70 : 55)
+    : 40;
 
-  return { fields, facts: [], confidence };
+  return { fields, facts, confidence };
 };
 
 // ---------------------------------------------------------------------------
-// toDispatchMap — unwrap merged state → dispatch-ready path/value pairs
+// toDispatchMap -- unwrap merged state -> dispatch-ready path/value pairs
 // ---------------------------------------------------------------------------
 
 /**
  * Convert the merged site state (which has {value, source} objects) into a flat
- * map of `storePath → plainValue` ready for store.batchDispatch().
+ * map of storePath -> plain value, ready for store.batchDispatch().
  *
- * @param {Object} mergedState - output of mergeExtractionBatch
- * @returns {Object}  e.g. { 'planning.zoneCode': 'NRZ1', 'planning.hasHO': true }
+ * @param {object} mergedFields - output of normalizeXxxResult().fields
+ * @returns {Array<{path: string, value: *}>}
  */
-export const toDispatchMap = (mergedState) => {
-  const result = {};
-  Object.entries(mergedState).forEach(([key, entry]) => {
-    const path = FIELD_TO_PATH[key];
-    if (!path) return;
-    const plain = (entry !== null && typeof entry === 'object' && 'value' in entry)
-      ? entry.value
-      : entry;
-    if (plain === null || plain === undefined) return;
-    result[path] = plain;
-  });
-  return result;
-};
-
-// ---------------------------------------------------------------------------
-// Main orchestrator
-// ---------------------------------------------------------------------------
-
-/**
- * Orchestrates extraction for all three site documents.
- * Routes each document to its specialist parser, supplements with ai_adapter,
- * then merges using the priority system (SURVEY:4 > S32:3 > VICPLAN:2).
- *
- * @param {File|string} vpFile   — VicPlan / Planning Certificate
- * @param {File|string} s32File  — Section 32 / Vendor Statement
- * @param {File|string} fspFile  — Feature & Level Survey Plan
- * @param {Object} currentSiteState — current site state from store (merge base)
- * @returns {{ dispatchMap: Object, synthesis: Object, confidence: number }}
- */
-export const extractAllFields = async (vpFile, s32File, fspFile, currentSiteState = {}) => {
-  const sources = [
-    { file: vpFile,  type: 'VICPLAN', priority: 'VICPLAN' },
-    { file: s32File, type: 'S32',     priority: 'S32'     },
-    { file: fspFile, type: 'SURVEY',  priority: 'SURVEY'  },
-  ];
-
-  let siteState         = { ...currentSiteState };
-  let allExtractedFacts = [];
-  let totalConfidence   = 0;
-  let docCount          = 0;
-
-  for (const source of sources) {
-    if (!source.file) continue;
-
-    try {
-      let text = '';
-      if (source.file instanceof File) {
-        // Use pdf_ocr.extractFileText() — handles PDFs via PDF.js (proper text layer),
-        // with automatic Tesseract OCR fallback for scanned/image pages.
-        // Replaces the previous source.file.text() which decoded raw PDF bytes as UTF-8
-        // (binary garbage, not the actual text content).
-        console.log('[UnifiedEngine] Extracting text from', source.file.name, '(', source.type, ')');
-        text = await extractFileText(source.file);
-        if (!text.trim()) {
-          console.warn('[UnifiedEngine] No text extracted from', source.file.name);
-        }
-      } else if (typeof source.file === 'string') {
-        text = source.file;
-      }
-
-      if (!text.trim()) continue;
-      docCount++;
-
-      // Type-aware specialist parsing
-      let normalized;
-      if (source.type === 'VICPLAN') {
-        const vpResult  = parseVicPlanText(text);
-        const aiResult  = await parseDocumentWithAI(text);
-        normalized      = normalizeVicPlanResult(vpResult, aiResult);
-      } else if (source.type === 'S32') {
-        const s32Result = parseSection32Text(text);
-        const aiResult  = await parseDocumentWithAI(text);
-        normalized      = normalizeS32Result(s32Result, aiResult);
-      } else {  // SURVEY
-        const survResult = parseSurveyPlan(text);
-        normalized       = normalizeSurveyResult(survResult);
-      }
-
-      // Priority-based merge
-      if (normalized.fields && Object.keys(normalized.fields).length) {
-        siteState = mergeExtractionBatch(siteState, normalized.fields, source.priority);
-      }
-
-      if (normalized.facts?.length) {
-        allExtractedFacts = [...allExtractedFacts, ...normalized.facts];
-      }
-
-      if (typeof normalized.confidence === 'number') {
-        totalConfidence += normalized.confidence;
-      }
-
-    } catch (e) {
-      console.error('[UnifiedEngine] Error processing', source.type, e);
-    }
-  }
-
-  // Constraint synthesis from deduplicated facts
-  const synthesis   = evaluateConstraints([...new Set(allExtractedFacts)]);
-  const dispatchMap = toDispatchMap(siteState);
-
-  return {
-    dispatchMap,
-    updatedSiteState: dispatchMap,   // legacy alias
-    synthesis,
-    confidence: docCount > 0 ? Math.round(totalConfidence / docCount) : 0,
-  };
+export const toDispatchMap = (mergedFields) => {
+  return Object.entries(mergedFields)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .map(([key, value]) => {
+      const path = FIELD_TO_PATH[key];
+      if (!path) return null;
+      return { path, value };
+    })
+    .filter(Boolean);
 };

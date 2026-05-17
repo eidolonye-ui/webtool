@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { C, T } from '../../../core/config/theme_v3.js';
+import { store } from '../../../core/store/store.js';
 import { synthesizeSiteAnalysis } from '../../../domain/spatial/synthesis_engine.js';
 
 /**
@@ -19,7 +20,16 @@ import { synthesizeSiteAnalysis } from '../../../domain/spatial/synthesis_engine
 export const SynthesisCard = ({ terrainData, site, planning, estimatedFields }) => {
   if (!terrainData) return null;
 
-  const analysis = synthesizeSiteAnalysis(terrainData, site, planning);
+  // Merge physical.siteEasements into constraints so the synthesis engine can
+  // compute real easement deductions (siteEasements live in physical, not planning).
+  const physical = store.getActiveScenario()?.physical || {};
+  const fspEasements = Array.isArray(physical.siteEasements) && physical.siteEasements.length > 0
+    ? physical.siteEasements : undefined;
+  const constraintsWithEasements = fspEasements
+    ? { ...planning, easements: fspEasements }
+    : planning;
+
+  const analysis = synthesizeSiteAnalysis(terrainData, site, constraintsWithEasements);
   if (analysis.error) {
     return (
       <div style={{ color: '#ff4d4f', padding: T.sp.md, fontSize: T.fs.xs }}>{analysis.error}</div>

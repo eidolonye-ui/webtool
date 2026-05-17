@@ -71,6 +71,14 @@ export const runLocationAnalysis = async (lat, lon) => {
     node["amenity"="cinema"](around:2000,${latF},${lonF});
     node["amenity"="swimming_pool"](around:3000,${latF},${lonF});
     way["leisure"="swimming_pool"](around:3000,${latF},${lonF});
+    way["leisure"="recreation_ground"](around:1500,${latF},${lonF});
+    way["leisure"="nature_reserve"](around:2000,${latF},${lonF});
+    way["leisure"="garden"](around:1000,${latF},${lonF});
+    node["leisure"="sports_centre"](around:2500,${latF},${lonF});
+    way["leisure"="sports_centre"](around:2500,${latF},${lonF});
+    node["amenity"="clinic"](around:2000,${latF},${lonF});
+    node["shop"="convenience"](around:600,${latF},${lonF});
+    node["amenity"="post_office"](around:1500,${latF},${lonF});
   );out body center;`;
 
   const mirrors = [
@@ -132,13 +140,15 @@ export const runLocationAnalysis = async (lat, lon) => {
     malls:         toList(e => e.tags?.shop === 'mall', 5000),
     departments:   toList(e => ['department_store','variety_store'].includes(e.tags?.shop), 3000),
     chemists:      toList(e => e.tags?.shop === 'chemist', 2000),
-    parks:         toList(e => e.tags?.leisure === 'park', 1000),
+    parks:         toList(e => ['park','recreation_ground','nature_reserve','garden'].includes(e.tags?.leisure), 1500),
     hospitals:     toList(e => e.tags?.amenity === 'hospital', 6000),
-    doctors:       toList(e => e.tags?.amenity === 'doctors', 2000),
+    doctors:       toList(e => e.tags?.amenity === 'doctors' || e.tags?.amenity === 'clinic', 2000),
     pharmacies:    toList(e => e.tags?.amenity === 'pharmacy', 1500),
     cafes:         toList(e => e.tags?.amenity === 'cafe', 800),
     restaurants:   toList(e => e.tags?.amenity === 'restaurant', 800),
-    gyms:          toList(e => e.tags?.leisure === 'fitness_centre', 2000),
+    gyms:          toList(e => e.tags?.leisure === 'fitness_centre' || e.tags?.leisure === 'sports_centre', 2500),
+    convenience:   toList(e => e.tags?.shop === 'convenience', 600),
+    postOffices:   toList(e => e.tags?.amenity === 'post_office', 1500),
     libraries:     toList(e => e.tags?.amenity === 'library', 2000),
     community:     toList(e => e.tags?.amenity === 'community_centre', 2000),
     cinemas:       toList(e => e.tags?.amenity === 'cinema', 2000),
@@ -166,11 +176,16 @@ export const runLocationAnalysis = async (lat, lon) => {
   // -------------------------------------------------------------------------
 
   // Transport (30 pts)
+  // Train: primary scoring; Tram: significant Melbourne bonus; Bus: walkability top-up
   const td      = loc.trains[0]?.d || 9999;
-  const tPts    = td <= 400 ? 30 : td <= 800 ? 23 : td <= 1200 ? 15 : td <= 2000 ? 7 : 0;
-  const tramBonus = loc.trams.some(t => t.d <= 600) ? 4 : 0;
-  const busPts    = loc.buses.some(b => b.d <= 300) ? 3 : loc.buses.some(b => b.d <= 500) ? 1 : 0;
-  const tScore    = Math.min(30, tPts + tramBonus + busPts);
+  const tPts    = td <= 400 ? 28 : td <= 800 ? 22 : td <= 1200 ? 14 : td <= 2000 ? 6 : 0;
+  // Tram bonus: Melbourne trams are high-frequency rapid transit — score accordingly
+  const tramD         = loc.trams[0]?.d || 9999;
+  const tramBonus     = tramD <= 200 ? 8 : tramD <= 400 ? 6 : tramD <= 600 ? 4 : tramD <= 1000 ? 2 : 0;
+  // Bus bonus: multiple nearby stops indicate good coverage
+  const nearBuses     = loc.buses.filter(b => b.d <= 400).length;
+  const busPts        = nearBuses >= 3 ? 4 : nearBuses >= 1 ? 2 : loc.buses.some(b => b.d <= 600) ? 1 : 0;
+  const tScore        = Math.min(30, tPts + tramBonus + busPts);
 
   // Education (20 pts)
   const sd      = loc.schools[0]?.d || 9999;
@@ -189,17 +204,22 @@ export const runLocationAnalysis = async (lat, lon) => {
 
   // Lifestyle (15 pts)
   const pD      = loc.parks[0]?.d || 9999;
-  const pPts    = pD <= 400 ? 7 : pD <= 700 ? 5 : pD <= 1000 ? 2 : 0;
+  const pPts    = pD <= 300 ? 7 : pD <= 600 ? 6 : pD <= 1000 ? 4 : pD <= 1500 ? 2 : 0;
   const cafePts = loc.cafes.length >= 8 ? 5 : loc.cafes.length >= 4 ? 3 : loc.cafes.length >= 1 ? 1 : 0;
   const gymPts  = loc.gyms.length ? 3 : 0;
-  const lScore  = Math.min(15, pPts + cafePts + gymPts);
+  // Walkability bonus: convenience store within 600m = corner-shop suburb feel
+  const convPts = loc.convenience?.some(c => c.d <= 400) ? 1 : 0;
+  const lScore  = Math.min(15, pPts + cafePts + gymPts + convPts);
 
   // Health (15 pts)
-  const hD    = loc.hospitals[0]?.d || 9999;
-  const hPts  = hD <= 2000 ? 7 : hD <= 4000 ? 4 : hD <= 6000 ? 2 : 0;
-  const drPts = loc.doctors.some(d => d.d <= 800) ? 5 : loc.doctors.some(d => d.d <= 1500) ? 3 : 0;
-  const phPts = loc.pharmacies.some(p => p.d <= 600) ? 3 : 0;
-  const hScore = Math.min(15, hPts + drPts + phPts);
+  const hD      = loc.hospitals[0]?.d || 9999;
+  const hPts    = hD <= 1500 ? 8 : hD <= 2000 ? 6 : hD <= 4000 ? 4 : hD <= 6000 ? 2 : 0;
+  // GP/clinic — combined (amenity=doctors + amenity=clinic now both in loc.doctors)
+  const gpD     = loc.doctors[0]?.d || 9999;
+  const drPts   = gpD <= 400 ? 5 : gpD <= 800 ? 4 : gpD <= 1500 ? 2 : 0;
+  const phD     = loc.pharmacies[0]?.d || 9999;
+  const phPts   = phD <= 400 ? 3 : phD <= 600 ? 2 : phD <= 1000 ? 1 : 0;
+  const hScore  = Math.min(15, hPts + drPts + phPts);
 
   const score = tScore + eScore + shScore + lScore + hScore;
   const label = score >= 80 ? 'Premium Location'
@@ -260,10 +280,10 @@ export const runLocationAnalysis = async (lat, lon) => {
       nearestKey: td <= 3000
         ? { icon: '🚂', name: loc.trains[0]?.name || 'Train Station', dist: fmtDist(td), raw: td }
         : (loc.trams[0] ? { icon: '🚋', name: loc.trams[0].name || 'Tram Stop', dist: loc.trams[0].distLabel, raw: loc.trams[0].d } : null),
-      thresholds: '≤400m = 30pts · ≤800m = 23pts · ≤1.2km = 15pts · ≤2km = 7pts · >2km = 0; +4pts tram ≤600m; +3pts bus ≤300m',
+      thresholds: 'Train ≤400m = 28pts · ≤800m = 22pts · ≤1.2km = 14pts · ≤2km = 6pts; Tram ≤200m = +8pts · ≤400m = +6pts · ≤600m = +4pts · ≤1km = +2pts; Bus ≥3 stops ≤400m = +4pts',
       detail: [
         td <= 3000 ? `Train: ${fmtDist(td)} (${loc.trains[0]?.name || 'Station'})` : 'No train within 3 km',
-        loc.trams.length ? `${loc.trams.length} tram stop(s), nearest ${loc.trams[0]?.distLabel}` : null,
+        loc.trams.length ? `${loc.trams.length} tram stop(s), nearest ${loc.trams[0]?.distLabel}${tramD <= 600 ? ' ✓' : ''}` : 'No tram stops within 1.5km',
         loc.buses.length ? `${loc.buses.length} bus stop(s) within 700m` : 'No bus stops within 700m',
       ].filter(Boolean).join(' · '),
       items: [
@@ -333,7 +353,7 @@ export const runLocationAnalysis = async (lat, lon) => {
     lifestyle: {
       score: lScore, max: 15,
       nearestKey: nearestItem(loc.parks, 'Park') ? { icon: '🌳', ...nearestItem(loc.parks, 'Park') } : null,
-      thresholds: 'Park ≤400m = 7pts · ≤700m = 5pts · ≤1km = 2pts; cafés ≥1 = 1pt · ≥4 = 3pts · ≥8 = 5pts; gym = 3pts',
+      thresholds: 'Park ≤300m = 7pts · ≤600m = 6pts · ≤1km = 4pts · ≤1.5km = 2pts; Cafés ≥1 = 1pt · ≥4 = 3pts · ≥8 = 5pts; Gym/Sports = 3pts; Convenience ≤400m = +1pt',
       detail: [
         loc.parks.length ? `${loc.parks.length} park(s), nearest ${fmtDist(pD)}` : 'No parks within 1 km',
         loc.cafes.length ? `${loc.cafes.length} café(s) within 800m` : 'No cafés within 800m',
@@ -347,13 +367,15 @@ export const runLocationAnalysis = async (lat, lon) => {
         ...loc.gyms.slice(0, 2).map(x =>       ({ icon: '🏋️', label: x.name || 'Fitness Centre', dist: x.distLabel })),
         ...loc.pools.slice(0, 1).map(x =>      ({ icon: '🏊', label: x.name || 'Swimming Pool',  dist: x.distLabel })),
         ...loc.cinemas.slice(0, 1).map(x =>    ({ icon: '🎬', label: x.name || 'Cinema',         dist: x.distLabel })),
+        ...(loc.convenience || []).slice(0, 2).map(x => ({ icon: '🏪', label: x.name || 'Convenience Store', dist: x.distLabel })),
+        ...(loc.postOffices || []).slice(0, 1).map(x => ({ icon: '📮', label: x.name || 'Post Office', dist: x.distLabel })),
       ],
     },
 
     health: {
       score: hScore, max: 15,
       nearestKey: nearestItem(loc.hospitals, 'Hospital') ? { icon: '🏥', ...nearestItem(loc.hospitals, 'Hospital') } : null,
-      thresholds: 'Hospital ≤2km = 7pts · ≤4km = 4pts · ≤6km = 2pts; GP ≤800m = 5pts · ≤1.5km = 3pts; pharmacy ≤600m = 3pts',
+      thresholds: 'Hospital ≤1.5km = 8pts · ≤2km = 6pts · ≤4km = 4pts · ≤6km = 2pts; GP/Clinic ≤400m = 5pts · ≤800m = 4pts · ≤1.5km = 2pts; Pharmacy ≤400m = 3pts · ≤600m = 2pts · ≤1km = 1pt',
       detail: [
         loc.hospitals.length ? `${loc.hospitals.length} hospital(s), nearest ${fmtDist(hD)} (${loc.hospitals[0]?.name || 'Hospital'})` : 'No hospital within 6 km',
         loc.doctors.length   ? `${loc.doctors.length} GP clinic(s), nearest ${loc.doctors[0]?.distLabel}` : 'No GPs within 2 km',
