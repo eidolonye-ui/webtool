@@ -88,6 +88,7 @@
     <div class="flex items-center gap-3">
       <span id="autosave-pill" class="hidden sm:inline-flex chip bg-emerald-50 text-emerald-700 whitespace-nowrap text-[10px]">● Saved</span>
       <button id="btn-undo" class="hidden sm:inline-flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-md px-2 py-1 text-[11px] font-bold transition-colors" title="Undo last save">↩ Undo</button>
+      <button id="btn-cloud-push" class="hidden sm:inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md px-2 py-1 text-[11px] font-bold transition-colors" title="Push to cloud now">☁ Sync</button>
       <button id="btn-export-excel" class="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-3 py-2 rounded-lg flex items-center gap-2 whitespace-nowrap">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
         <span class="hidden sm:inline">Export Excel</span>
@@ -656,6 +657,32 @@
     </div>
 
     <hr class="my-6"/>
+    <h3 class="font-semibold mb-2">☁️ Cloud sync via GitHub Gist</h3>
+    <p class="text-xs text-slate-500 mb-1">Sync all your projects across every device — phone, tablet, computer. Uses your free GitHub account as storage. Data is stored in a private Gist only you can access.</p>
+    <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 text-xs text-blue-800 leading-relaxed">
+      <strong>One-time setup:</strong> Go to <a href="https://github.com/settings/tokens/new" target="_blank" class="underline font-semibold">github.com/settings/tokens/new</a> → Note: "Reno Master" → Expiration: No expiration → tick <strong>gist</strong> scope only → Generate → copy the token below.
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+      <label class="block">
+        <span class="text-xs font-semibold text-slate-600">GitHub Personal Access Token</span>
+        <input id="st-gist-token" type="password" class="mt-1 w-full rounded-lg border-slate-300 border px-3 py-2 text-sm mono" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"/>
+      </label>
+      <label class="block">
+        <span class="text-xs font-semibold text-slate-600">Gist ID <span class="font-normal text-slate-400">(auto-filled after first push)</span></span>
+        <input id="st-gist-id" type="text" class="mt-1 w-full rounded-lg border-slate-300 border px-3 py-2 text-sm mono" placeholder="Leave blank on first use"/>
+      </label>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-2">
+      <button id="st-gist-push" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2">⬆ Push to cloud</button>
+      <button id="st-gist-pull" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2">⬇ Pull from cloud</button>
+      <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none ml-1">
+        <input id="st-gist-auto" type="checkbox" class="w-4 h-4 accent-indigo-600"/>
+        Auto-push on every save
+      </label>
+    </div>
+    <div id="st-gist-status" class="text-xs text-slate-500 min-h-[18px]"></div>
+
+    <hr class="my-6"/>
     <h3 class="font-semibold mb-3">Change password</h3>
     <p class="text-xs text-slate-500 mb-3">Password is stored as a SHA-256 hash — never in plain text. After changing, all other devices will need to use the new password on next login.</p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
@@ -888,6 +915,7 @@ function saveCurrentProject(){
   if(!_currentId)return;
   saveSnapshot();
   localStorage.setItem(projKey(_currentId),JSON.stringify(state));
+  gistAutoPushIfEnabled();
   const pill=$('autosave-pill');
   if(pill){pill.textContent='● Saved';pill.style.opacity=1;setTimeout(()=>{pill.style.opacity=.4;},1800);}
   const list=getAllProjects();
@@ -3016,28 +3044,16 @@ html.dark #btn-dark{background:#1e293b!important;color:#fbbf24!important}
 function renderSettings(){
   const s=state.settings||{};
   const set=(id,v)=>{const e=$(id);if(e)e.value=v??'';};
+  // Cloud sync fields (stored per-device in localStorage, not in state)
+  const tokenEl=$('st-gist-token'); if(tokenEl) tokenEl.value=gistToken()?'••••••••••••••••':'';
+  const idEl=$('st-gist-id'); if(idEl) idEl.value=gistId();
+  const autoEl=$('st-gist-auto'); if(autoEl) autoEl.checked=localStorage.getItem(GIST_AUTO_KEY)==='1';
   set('st-contingency',s.contingencyPct??12);
   set('st-agent-pct',s.agentCommissionPct??2);
   set('st-permit',s.councilPermitEst??3500);
   set('st-sqm-target',s.costPerSqmTarget??1500);
   set('st-stamp-override',s.stampDutyOverridePct??0);
   // Snapshot list
-  // Change password
-  $('st-change-pwd')?.addEventListener('click',async()=>{
-    const np=$('st-pwd-new')?.value||'';
-    const nc=$('st-pwd-confirm')?.value||'';
-    const msg=$('st-pwd-msg');
-    if(!np){if(msg){msg.textContent='Enter a new password.';msg.className='mt-2 text-xs text-red-600';msg.classList.remove('hidden');}return;}
-    if(np!==nc){if(msg){msg.textContent='Passwords do not match.';msg.className='mt-2 text-xs text-red-600';msg.classList.remove('hidden');}return;}
-    if(np.length<6){if(msg){msg.textContent='Password must be at least 6 characters.';msg.className='mt-2 text-xs text-red-600';msg.classList.remove('hidden');}return;}
-    const newHash=await sha256(np);
-    // Store new hash in localStorage (overrides compiled hash)
-    localStorage.setItem('mrm_auth_hash',newHash);
-    if($('st-pwd-new'))$('st-pwd-new').value='';
-    if($('st-pwd-confirm'))$('st-pwd-confirm').value='';
-    if(msg){msg.textContent='✓ Password updated. Use the new password on next login.';msg.className='mt-2 text-xs text-emerald-600';msg.classList.remove('hidden');}
-  });
-
   const sl=$('snap-list');
   if(sl&&_currentId){
     try{
@@ -3068,6 +3084,36 @@ function wireSettings(){
     renderDashboard();
     showToast('✓ Settings saved');
   });
+  // Cloud sync buttons
+  $('st-gist-push')?.addEventListener('click',async()=>{
+    const tok=$('st-gist-token')?.value||'';
+    const id=$('st-gist-id')?.value.trim()||'';
+    // Only update localStorage if user typed a real value (not the masked placeholder)
+    if(tok&&!tok.startsWith('•')) localStorage.setItem(GIST_TOKEN_KEY,tok);
+    if(id) localStorage.setItem(GIST_ID_KEY,id);
+    if(gistToken()&&gistId()){const cb=$('btn-cloud-push');if(cb)cb.classList.remove('hidden');}
+    await gistPush();
+  });
+  $('st-gist-pull')?.addEventListener('click',async()=>{
+    const tok=$('st-gist-token')?.value||'';
+    const id=$('st-gist-id')?.value.trim()||'';
+    if(tok&&!tok.startsWith('•')) localStorage.setItem(GIST_TOKEN_KEY,tok);
+    if(id) localStorage.setItem(GIST_ID_KEY,id);
+    await gistPull();
+  });
+  $('st-gist-auto')?.addEventListener('change',e=>{
+    localStorage.setItem(GIST_AUTO_KEY,e.target.checked?'1':'0');
+  });
+  // Show/hide actual token on focus
+  $('st-gist-token')?.addEventListener('focus',()=>{
+    const el=$('st-gist-token');
+    if(el&&el.value.startsWith('•')) el.value=gistToken();
+  });
+  $('st-gist-token')?.addEventListener('blur',()=>{
+    const el=$('st-gist-token');
+    if(el&&gistToken()&&!el.value.startsWith('•')&&el.value===gistToken()) el.value='••••••••••••••••';
+  });
+
   $('st-reset').addEventListener('click',()=>{
     state.settings={contingencyPct:12,agentCommissionPct:2,councilPermitEst:3500,stampDutyOverridePct:0,costPerSqmTarget:1500};
     renderSettings();
@@ -3109,6 +3155,108 @@ function wireSettings(){
       }catch(e){showToast('Restore failed','bg-red-600');}
     });
   }
+}
+
+
+// ==================== CLOUD SYNC (GitHub Gist) ====================
+const GIST_TOKEN_KEY = 'mrm_gist_token';
+const GIST_ID_KEY    = 'mrm_gist_id';
+const GIST_AUTO_KEY  = 'mrm_gist_auto';
+const GIST_FILE      = 'mrm_projects.json';
+
+function gistToken(){ return localStorage.getItem(GIST_TOKEN_KEY)||''; }
+function gistId()   { return localStorage.getItem(GIST_ID_KEY)||''; }
+
+function gistStatus(msg, color='text-slate-500'){
+  const el=$('st-gist-status');
+  if(el){ el.textContent=msg; el.className='text-xs min-h-[18px] '+color; }
+}
+
+// Collect ALL project data (not just current project)
+function allProjectsPayload(){
+  const index=getAllProjects();
+  const projects={};
+  index.forEach(p=>{
+    const raw=localStorage.getItem(projKey(p.id));
+    if(raw) projects[p.id]=JSON.parse(raw);
+  });
+  return { index, projects, exportedAt: new Date().toISOString(), tool:'MelbourneRenoMaster_v3' };
+}
+
+// Push all data to Gist
+async function gistPush(){
+  const token=gistToken();
+  if(!token){ gistStatus('⚠ Enter your GitHub token first','text-amber-600'); return; }
+  gistStatus('Pushing…','text-slate-400');
+  const payload=JSON.stringify(allProjectsPayload(), null, 2);
+  const id=gistId();
+  try{
+    let res, data;
+    if(!id){
+      // Create new private gist
+      res=await fetch('https://api.github.com/gists',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'application/vnd.github+json'},
+        body:JSON.stringify({ description:'Melbourne Reno Master — project data', public:false,
+          files:{ [GIST_FILE]:{ content:payload } } })
+      });
+      data=await res.json();
+      if(!res.ok) throw new Error(data.message||'Create failed');
+      localStorage.setItem(GIST_ID_KEY, data.id);
+      const idEl=$('st-gist-id');
+      if(idEl) idEl.value=data.id;
+      gistStatus('✓ Gist created & data pushed. ID saved — paste this same ID on your other devices.','text-emerald-600');
+    } else {
+      // Update existing gist
+      res=await fetch('https://api.github.com/gists/'+id,{
+        method:'PATCH',
+        headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'application/vnd.github+json'},
+        body:JSON.stringify({ files:{ [GIST_FILE]:{ content:payload } } })
+      });
+      data=await res.json();
+      if(!res.ok) throw new Error(data.message||'Update failed');
+      gistStatus('✓ Pushed at '+new Date().toLocaleTimeString('en-AU'),'text-emerald-600');
+    }
+  }catch(e){ gistStatus('✗ Push failed: '+e.message,'text-red-600'); }
+}
+
+// Pull all data from Gist and reload
+async function gistPull(){
+  const token=gistToken();
+  const id=gistId();
+  if(!token||!id){ gistStatus('⚠ Enter token and Gist ID first','text-amber-600'); return; }
+  if(!confirm('Pull from cloud?\n\nThis will REPLACE all local data with the cloud version.\n\nYour current data will be lost unless you pushed it first.')) return;
+  gistStatus('Pulling…','text-slate-400');
+  try{
+    const res=await fetch('https://api.github.com/gists/'+id,{
+      headers:{'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json'}
+    });
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.message||'Fetch failed');
+    const file=data.files?.[GIST_FILE];
+    if(!file) throw new Error('No data file found in Gist');
+    const content=JSON.parse(file.content||file.raw_url&&await(await fetch(file.raw_url)).text());
+    if(!content.index||!content.projects) throw new Error('Invalid data format');
+    // Write all projects to localStorage
+    saveAllProjects(content.index);
+    Object.entries(content.projects).forEach(([id,proj])=>{
+      localStorage.setItem(projKey(id), JSON.stringify(proj));
+    });
+    // Load first project
+    const first=content.index[0];
+    if(first){ _currentId=first.id; loadProject(first.id); }
+    updateProjectSelector();
+    renderAll();
+    gistStatus('✓ Pulled at '+new Date().toLocaleTimeString('en-AU')+' — '+content.index.length+' project(s) loaded','text-emerald-600');
+    showToast('☁️ Cloud data loaded','bg-indigo-600');
+  }catch(e){ gistStatus('✗ Pull failed: '+e.message,'text-red-600'); }
+}
+
+// Auto-push hook — called from saveCurrentProject if enabled
+function gistAutoPushIfEnabled(){
+  if(localStorage.getItem(GIST_AUTO_KEY)!=='1') return;
+  if(!gistToken()||!gistId()) return;
+  gistPush();
 }
 
 // ==================== JSON BACKUP / RESTORE ====================
@@ -3216,6 +3364,13 @@ function init(){
   wireSettings();
   // Undo button
   $('btn-undo').addEventListener('click',undoLastSave);
+  $('btn-cloud-push')?.addEventListener('click',async()=>{
+    const tok=gistToken(); const id=gistId();
+    if(!tok||!id){showToast('Set GitHub token & Gist ID in ⚙ Settings first','bg-slate-600');return;}
+    await gistPush();
+  });
+  // Show cloud btn if configured
+  if(gistToken()&&gistId())$('btn-cloud-push')?.classList.remove('hidden');
   $('ex-json').addEventListener('click',exportJSON);
   $('ex-import').addEventListener('change',e=>{if(e.target.files[0])importJSON(e.target.files[0]);});
   $('ex-clear').addEventListener('click',()=>{
