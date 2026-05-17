@@ -42,6 +42,33 @@
   </style>
 </head>
 <body class="bg-slate-50 text-ink min-h-screen">
+<!-- ====== LOGIN OVERLAY ====== -->
+<div id="login-overlay" style="position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 40%,#4f46e5 100%);display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif">
+  <div style="background:#fff;border-radius:20px;padding:40px 44px;width:100%;max-width:400px;box-shadow:0 25px 60px rgba(0,0,0,0.4);margin:16px">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:36px;margin-bottom:8px">&#127968;</div>
+      <h1 style="font-size:20px;font-weight:800;color:#1e1b4b;margin:0 0 4px">Melbourne Reno Master</h1>
+      <p style="font-size:12px;color:#64748b;margin:0">Private access only</p>
+    </div>
+    <div id="login-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:16px;text-align:center">
+      Incorrect password. Please try again.
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px">Password</label>
+      <input id="login-pwd" type="password" placeholder="Enter password"
+        style="width:100%;box-sizing:border-box;border:2px solid #e2e8f0;border-radius:10px;padding:12px 14px;font-size:15px;outline:none"/>
+    </div>
+    <button id="login-btn"
+      style="width:100%;background:#4f46e5;color:#fff;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:700;cursor:pointer">
+      Sign in
+    </button>
+    <p style="font-size:10px;color:#94a3b8;text-align:center;margin-top:20px">
+      Authorised users only &mdash; Melbourne Reno Master
+    </p>
+  </div>
+</div>
+<div id="app-root" style="display:none">
+
 
 <!-- HEADER -->
 <header class="bg-white border-b border-slate-200 sticky top-0 z-30 no-print">
@@ -627,6 +654,24 @@
       <button id="st-save" class="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-5 py-2 rounded-lg">Save settings</button>
       <button id="st-reset" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-4 py-2 rounded-lg">Reset to defaults</button>
     </div>
+
+    <hr class="my-6"/>
+    <h3 class="font-semibold mb-3">Change password</h3>
+    <p class="text-xs text-slate-500 mb-3">Password is stored as a SHA-256 hash — never in plain text. After changing, all other devices will need to use the new password on next login.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+      <label class="block">
+        <span class="text-xs font-semibold text-slate-600">New password</span>
+        <input id="st-pwd-new" type="password" class="mt-1 w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" placeholder="New password"/>
+      </label>
+      <label class="block">
+        <span class="text-xs font-semibold text-slate-600">Confirm password</span>
+        <input id="st-pwd-confirm" type="password" class="mt-1 w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" placeholder="Confirm new password"/>
+      </label>
+      <div>
+        <button id="st-change-pwd" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-lg">Update password</button>
+      </div>
+    </div>
+    <div id="st-pwd-msg" class="mt-2 text-xs hidden"></div>
 
     <hr class="my-6"/>
     <h3 class="font-semibold mb-3">Snapshot history (undo)</h3>
@@ -2977,6 +3022,22 @@ function renderSettings(){
   set('st-sqm-target',s.costPerSqmTarget??1500);
   set('st-stamp-override',s.stampDutyOverridePct??0);
   // Snapshot list
+  // Change password
+  $('st-change-pwd')?.addEventListener('click',async()=>{
+    const np=$('st-pwd-new')?.value||'';
+    const nc=$('st-pwd-confirm')?.value||'';
+    const msg=$('st-pwd-msg');
+    if(!np){if(msg){msg.textContent='Enter a new password.';msg.className='mt-2 text-xs text-red-600';msg.classList.remove('hidden');}return;}
+    if(np!==nc){if(msg){msg.textContent='Passwords do not match.';msg.className='mt-2 text-xs text-red-600';msg.classList.remove('hidden');}return;}
+    if(np.length<6){if(msg){msg.textContent='Password must be at least 6 characters.';msg.className='mt-2 text-xs text-red-600';msg.classList.remove('hidden');}return;}
+    const newHash=await sha256(np);
+    // Store new hash in localStorage (overrides compiled hash)
+    localStorage.setItem('mrm_auth_hash',newHash);
+    if($('st-pwd-new'))$('st-pwd-new').value='';
+    if($('st-pwd-confirm'))$('st-pwd-confirm').value='';
+    if(msg){msg.textContent='✓ Password updated. Use the new password on next login.';msg.className='mt-2 text-xs text-emerald-600';msg.classList.remove('hidden');}
+  });
+
   const sl=$('snap-list');
   if(sl&&_currentId){
     try{
@@ -3012,6 +3073,22 @@ function wireSettings(){
     renderSettings();
     showToast('Settings reset to defaults','bg-slate-600');
   });
+  // Change password
+  $('st-change-pwd')?.addEventListener('click',async()=>{
+    const np=$('st-pwd-new')?.value||'';
+    const nc=$('st-pwd-confirm')?.value||'';
+    const msg=$('st-pwd-msg');
+    if(!np){if(msg){msg.textContent='Enter a new password.';msg.className='mt-2 text-xs text-red-600';msg.classList.remove('hidden');}return;}
+    if(np!==nc){if(msg){msg.textContent='Passwords do not match.';msg.className='mt-2 text-xs text-red-600';msg.classList.remove('hidden');}return;}
+    if(np.length<6){if(msg){msg.textContent='Password must be at least 6 characters.';msg.className='mt-2 text-xs text-red-600';msg.classList.remove('hidden');}return;}
+    const newHash=await sha256(np);
+    // Store new hash in localStorage (overrides compiled hash)
+    localStorage.setItem('mrm_auth_hash',newHash);
+    if($('st-pwd-new'))$('st-pwd-new').value='';
+    if($('st-pwd-confirm'))$('st-pwd-confirm').value='';
+    if(msg){msg.textContent='✓ Password updated. Use the new password on next login.';msg.className='mt-2 text-xs text-emerald-600';msg.classList.remove('hidden');}
+  });
+
   const sl=$('snap-list');
   if(sl){
     sl.addEventListener('click',e=>{
@@ -3184,7 +3261,60 @@ self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r
     }
   })();
 
-document.addEventListener('DOMContentLoaded',init);
+
+// ==================== AUTH / LOGIN ====================
+const AUTH_HASH='8c0bfc5bc82e3462832f0f4222d954dc7249c315289636451d6bd649739ca2e4';
+const AUTH_KEY='mrm_auth_session';
+
+async function sha256(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function attemptLogin(){
+  const pwd=document.getElementById('login-pwd')?.value||'';
+  if(!pwd)return;
+  const btn=document.getElementById('login-btn');
+  if(btn){btn.textContent='Checking…';btn.disabled=true;}
+  const hash=await sha256(pwd);
+  const storedHash=localStorage.getItem('mrm_auth_hash')||AUTH_HASH;
+  if(hash===storedHash){
+    sessionStorage.setItem(AUTH_KEY,'1');
+    document.getElementById('login-overlay').style.display='none';
+    const appRoot=document.getElementById('app-root');
+    if(appRoot)appRoot.style.display='';
+    renderAll(); // refresh all tabs now overlay is gone
+  } else {
+    const err=document.getElementById('login-error');
+    if(err)err.style.display='block';
+    const input=document.getElementById('login-pwd');
+    if(input){input.value='';input.focus();}
+  }
+  if(btn){btn.textContent='Sign in';btn.disabled=false;}
+}
+
+function initAuth(){
+  // Already authenticated this session?
+  if(sessionStorage.getItem(AUTH_KEY)==='1'){
+    document.getElementById('login-overlay').style.display='none';
+    document.getElementById('app-root').style.display='';
+    return;
+  }
+  document.getElementById('login-btn')?.addEventListener('click',attemptLogin);
+  document.getElementById('login-pwd')?.addEventListener('keydown',e=>{
+    if(e.key==='Enter')attemptLogin();
+  });
+  // Focus password field
+  setTimeout(()=>document.getElementById('login-pwd')?.focus(),100);
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  // Always init the app (DOM is present even while hidden behind overlay)
+  init();
+  // Then handle auth visibility
+  initAuth();
+});
 </script>
+</div><!-- /app-root -->
 </body>
 </html>
