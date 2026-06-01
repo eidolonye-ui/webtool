@@ -8,7 +8,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- xlsx-js-style (styled exports). Falls back to plain SheetJS if CDN unreachable. -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx-js-style.min.js"
+          onerror="var fb=document.createElement('script');fb.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';document.head.appendChild(fb);console.warn('xlsx-js-style CDN failed — loaded plain SheetJS (no cell styling)')"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
   <script>
     tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']},colors:{ink:'#0f172a',brand:{50:'#eef4ff',100:'#dce7ff',500:'#3b5bdb',600:'#2f49b8',700:'#243a96'},accent:'#10b981',warn:'#f59e0b',danger:'#ef4444'}}}};
@@ -2853,383 +2855,465 @@ function renderDashboard(){
 }
 // ==================== EXCEL EXPORT ====================
 function exportXLSX(){
-  if(!window.XLSX){alert('XLSX library not loaded. Check your internet connection.');return;}
+  // If XLSX not yet loaded (fallback CDN may still be downloading), retry once after 2s
+  if(!window.XLSX){
+    showToast('Loading Excel library…','bg-slate-600');
+    setTimeout(()=>{
+      if(!window.XLSX){alert('Excel library not loaded.\n\nCheck your internet connection and try again.');}
+      else exportXLSX();
+    },2000);
+    return;
+  }
   const wb=XLSX.utils.book_new();
   const p=state.project;
   const t=budgetTotals();
   const today=isoToday();
-  const fm=n=>(+n||0)===0?0:Math.round(+n||0);
-  const stars={'A':'★★★','B':'★★','C':'★'};
 
-  // ──────────────────────────────────────────────
-  // Sheet 1 · 📊 Project Overview
-  // ──────────────────────────────────────────────
+  // ─── Color palette (matches app brand) ───
+  const C={
+    ink:'0F172A', navy:'1E3A8A', brand:'2F49B8', brandLight:'DCE7FF',
+    slate800:'1E293B', slate600:'475569', slate400:'94A3B8', slate100:'F1F5F9', slate50:'F8FAFC',
+    white:'FFFFFF', emerald:'166534', emeraldBg:'DCFCE7', emeraldHdr:'064E3B',
+    amber:'92400E', amberBg:'FEF3C7', amberHdr:'78350F',
+    blue:'1E40AF', blueBg:'DBEAFE',
+    red:'DC2626', redBg:'FEF2F2',
+    purple:'6D28D9', purpleBg:'EDE9FE',
+    teal:'0F766E', tealBg:'CCFBF1',
+    violet:'5B21B6', violetBg:'EDE9FE',
+    lime:'3F6212', limeBg:'ECFCCB',
+    border:'C7D2FE',
+  };
+
+  // ─── Style factory ───
+  const bd=(c=C.border)=>({top:{style:'thin',color:{rgb:c}},bottom:{style:'thin',color:{rgb:c}},left:{style:'thin',color:{rgb:c}},right:{style:'thin',color:{rgb:c}}});
+  const bdOuter=(c=C.navy)=>({top:{style:'medium',color:{rgb:c}},bottom:{style:'medium',color:{rgb:c}},left:{style:'medium',color:{rgb:c}},right:{style:'medium',color:{rgb:c}}});
+
+  const sty={
+    title:    {fill:{fgColor:{rgb:C.ink}},       font:{bold:true,sz:14,color:{rgb:C.white},name:'Arial'},     alignment:{horizontal:'left',vertical:'center'},border:bd(C.ink)},
+    subtitle: {fill:{fgColor:{rgb:C.slate800}},  font:{sz:9,color:{rgb:C.slate400},name:'Arial'},             alignment:{horizontal:'left',vertical:'center'},border:bd(C.slate800)},
+    colHdr:   {fill:{fgColor:{rgb:C.navy}},       font:{bold:true,sz:9,color:{rgb:C.white},name:'Arial'},      alignment:{horizontal:'center',vertical:'center',wrapText:true},border:bd(C.brand)},
+    colHdrL:  {fill:{fgColor:{rgb:C.navy}},       font:{bold:true,sz:9,color:{rgb:C.white},name:'Arial'},      alignment:{horizontal:'left',vertical:'center',wrapText:true},border:bd(C.brand)},
+    catHdr:   {fill:{fgColor:{rgb:C.brand}},      font:{bold:true,sz:10,color:{rgb:C.white},name:'Arial'},     alignment:{horizontal:'left',vertical:'center'},border:bd(C.brand)},
+    catHdrEm: {fill:{fgColor:{rgb:C.emeraldHdr}}, font:{bold:true,sz:10,color:{rgb:C.white},name:'Arial'},     alignment:{horizontal:'left',vertical:'center'},border:bd(C.emeraldHdr)},
+    catHdrAm: {fill:{fgColor:{rgb:C.amberHdr}},   font:{bold:true,sz:10,color:{rgb:C.white},name:'Arial'},     alignment:{horizontal:'left',vertical:'center'},border:bd(C.amberHdr)},
+    catHdrV:  {fill:{fgColor:{rgb:C.violet}},     font:{bold:true,sz:10,color:{rgb:C.white},name:'Arial'},     alignment:{horizontal:'left',vertical:'center'},border:bd(C.violet)},
+    catHdrL:  {fill:{fgColor:{rgb:C.lime}},       font:{bold:true,sz:10,color:{rgb:C.white},name:'Arial'},     alignment:{horizontal:'left',vertical:'center'},border:bd(C.lime)},
+    dataE:    {fill:{fgColor:{rgb:C.slate50}},    font:{sz:9,name:'Arial'},                                    alignment:{horizontal:'left',vertical:'top',wrapText:true},border:bd()},
+    dataO:    {fill:{fgColor:{rgb:C.white}},      font:{sz:9,name:'Arial'},                                    alignment:{horizontal:'left',vertical:'top',wrapText:true},border:bd()},
+    dataR:    {fill:{fgColor:{rgb:C.white}},      font:{sz:9,name:'Arial'},                                    alignment:{horizontal:'right',vertical:'center'},border:bd()},
+    dataRE:   {fill:{fgColor:{rgb:C.slate50}},    font:{sz:9,name:'Arial'},                                    alignment:{horizontal:'right',vertical:'center'},border:bd()},
+    dataC:    {fill:{fgColor:{rgb:C.white}},      font:{sz:9,name:'Arial'},                                    alignment:{horizontal:'center',vertical:'center'},border:bd()},
+    dataCE:   {fill:{fgColor:{rgb:C.slate50}},    font:{sz:9,name:'Arial'},                                    alignment:{horizontal:'center',vertical:'center'},border:bd()},
+    mono:     {fill:{fgColor:{rgb:C.white}},      font:{sz:9,name:'Courier New'},                              alignment:{horizontal:'right',vertical:'center'},border:bd()},
+    monoE:    {fill:{fgColor:{rgb:C.slate50}},    font:{sz:9,name:'Courier New'},                              alignment:{horizontal:'right',vertical:'center'},border:bd()},
+    subtot:   {fill:{fgColor:{rgb:C.brandLight}}, font:{bold:true,sz:9,color:{rgb:C.blue},name:'Arial'},       alignment:{horizontal:'right',vertical:'center'},border:bd(C.brand)},
+    subtotL:  {fill:{fgColor:{rgb:C.brandLight}}, font:{bold:true,sz:9,color:{rgb:C.blue},name:'Arial'},       alignment:{horizontal:'left',vertical:'center'},border:bd(C.brand)},
+    grand:    {fill:{fgColor:{rgb:C.ink}},        font:{bold:true,sz:10,color:{rgb:C.white},name:'Arial'},     alignment:{horizontal:'right',vertical:'center'},border:bd(C.ink)},
+    grandL:   {fill:{fgColor:{rgb:C.ink}},        font:{bold:true,sz:10,color:{rgb:C.white},name:'Arial'},     alignment:{horizontal:'left',vertical:'center'},border:bd(C.ink)},
+    priA:     {fill:{fgColor:{rgb:C.amberBg}},    font:{bold:true,sz:9,color:{rgb:C.amber},name:'Arial'},      alignment:{horizontal:'center',vertical:'center'},border:bd()},
+    priB:     {fill:{fgColor:{rgb:C.blueBg}},     font:{sz:9,color:{rgb:C.blue},name:'Arial'},                 alignment:{horizontal:'center',vertical:'center'},border:bd()},
+    priC:     {fill:{fgColor:{rgb:C.slate100}},   font:{sz:9,color:{rgb:C.slate600},name:'Arial'},             alignment:{horizontal:'center',vertical:'center'},border:bd()},
+    paid:     {fill:{fgColor:{rgb:C.emeraldBg}},  font:{sz:9,color:{rgb:C.emerald},name:'Courier New'},        alignment:{horizontal:'right',vertical:'center'},border:bd()},
+    remain:   {fill:{fgColor:{rgb:C.redBg}},      font:{sz:9,color:{rgb:C.red},name:'Courier New'},            alignment:{horizontal:'right',vertical:'center'},border:bd()},
+    ok:       {fill:{fgColor:{rgb:C.emeraldBg}},  font:{sz:9,color:{rgb:C.emerald},name:'Arial'},              alignment:{horizontal:'center',vertical:'center'},border:bd()},
+    warn:     {fill:{fgColor:{rgb:C.amberBg}},    font:{sz:9,color:{rgb:C.amber},name:'Arial'},                alignment:{horizontal:'center',vertical:'center'},border:bd()},
+    bad:      {fill:{fgColor:{rgb:C.redBg}},      font:{sz:9,color:{rgb:C.red},name:'Arial'},                  alignment:{horizontal:'center',vertical:'center'},border:bd()},
+    kpiKey:   {fill:{fgColor:{rgb:C.slate800}},   font:{bold:true,sz:9,color:{rgb:C.slate400},name:'Arial'},   alignment:{horizontal:'left',vertical:'center'},border:bd(C.slate800)},
+    kpiVal:   {fill:{fgColor:{rgb:C.slate50}},    font:{bold:true,sz:11,name:'Courier New'},                   alignment:{horizontal:'right',vertical:'center'},border:bd()},
+    kpiValG:  {fill:{fgColor:{rgb:C.emeraldBg}},  font:{bold:true,sz:11,color:{rgb:C.emerald},name:'Courier New'},alignment:{horizontal:'right',vertical:'center'},border:bd()},
+    kpiValR:  {fill:{fgColor:{rgb:C.redBg}},      font:{bold:true,sz:11,color:{rgb:C.red},name:'Courier New'},  alignment:{horizontal:'right',vertical:'center'},border:bd()},
+    secHdr:   {fill:{fgColor:{rgb:C.slate800}},   font:{bold:true,sz:10,color:{rgb:C.white},name:'Arial'},     alignment:{horizontal:'left',vertical:'center'},border:bd(C.slate800)},
+    note:     {fill:{fgColor:{rgb:'FFFBEB'}},     font:{italic:true,sz:8,color:{rgb:C.slate600},name:'Arial'}, alignment:{horizontal:'left',vertical:'top',wrapText:true},border:bd('FEF3C7')},
+    empty:    {fill:{fgColor:{rgb:C.white}},      font:{sz:9},alignment:{},border:bd(C.white)},
+  };
+
+  // ─── Cell helpers ───
+  const cs=(v,s,t)=>({v:v??'',s,t:t||(typeof v==='number'?'n':'s')});
+  const cn=(v,s)=>({v:+v||0,s:s||sty.mono,t:'n'});
+  const cm=(v,s)=>({v:+v||0,s:s||sty.mono,t:'n',z:'_("$"* #,##0_);_("$"* (#,##0);_("$"* "-"_);_(@_)'});
+  const ce=(v,s)=>cs(v,s||sty.empty);
+  const priSty=(pri)=>pri==='A'?sty.priA:pri==='B'?sty.priB:sty.priC;
+  const priLbl=(pri)=>pri==='A'?'A ★★★':pri==='B'?'B ★★':'C ★';
+
+  // ─── Sheet builder: sets row heights and col widths ───
+  function mkWs(rows){
+    const ws=XLSX.utils.aoa_to_sheet(rows.map(r=>r.map(c=>(c&&c.v!==undefined)?c:ce(''))));
+    // Apply styles cell by cell
+    rows.forEach((row,r)=>row.forEach((cell,c)=>{
+      if(cell&&cell.s){
+        const addr=XLSX.utils.encode_cell({r,c});
+        if(ws[addr])ws[addr].s=cell.s;
+        if(cell.z&&ws[addr])ws[addr].z=cell.z;
+      }
+    }));
+    return ws;
+  }
+
+  // ─── Merge helper ───
+  function addMerges(ws,merges){ws['!merges']=(ws['!merges']||[]).concat(merges.map(([r1,c1,r2,c2])=>({s:{r:r1,c:c1},e:{r:r2,c:c2}})));}
+
+  // ─── Row freeze ───
+  function freezeRows(ws,row=1){ws['!freeze']={xSplit:0,ySplit:row,topLeftCell:XLSX.utils.encode_cell({r:row,c:0})};}
+
+  const fm=n=>'$'+(Math.round(+n||0)).toLocaleString('en-AU');
   const salePrice=+p.targetSalePrice||0;
   const saleCosts=state.budget.filter(b=>b.cat==='Sale Cost').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);
-  const estimatedNet=salePrice-(+p.mortgageBalance||0)-saleCosts-t.grand;
+  const net=salePrice-(+p.mortgageBalance||0)-saleCosts-t.grand;
   const tasks=state.schedule||[];
   const doneTasks=tasks.filter(tk=>tk.done).length;
   const latestEnd=tasks.filter(tk=>tk.plannedEnd).reduce((a,b)=>b.plannedEnd>a?b.plannedEnd:a,'');
-  const overdueTasks=tasks.filter(tk=>!tk.done&&tk.plannedEnd&&tk.plannedEnd<today);
-  const openDefects=(state.punch||[]).filter(d=>d.status!=='Fixed');
-  const highRisks=(state.risks||[]).filter(r=>r.impact==='High'&&r.status==='Open');
 
-  const s1=[
-    [p.name||'Melbourne Renovation Project','','','','',''],
-    [p.address||'','','','','',''],
-    ['Generated: '+new Date().toLocaleString('en-AU'),'','','','',''],
-    ['','','','','',''],
-    // ── Project Details ──
-    ['PROJECT DETAILS','','','PROPERTY FINANCIALS','',''],
-    ['Property Type',p.propertyType||'—','','Purchase Price'   ,fm(p.purchasePrice),  ''],
-    ['Investment Strategy',p.investmentStrategy||'—','','Target Sale Price',fm(salePrice),''],
-    ['Year Built',p.yearBuilt||'—','','Mortgage Payout'   ,fm(p.mortgageBalance),''],
-    ['Council',p.council||'—','','','',''],
-    ['Floor Area (m²)',p.area>0?p.area+'m²':'—','','','',''],
-    ['Start Date',p.startDate||'—','','','',''],
-    ['DLP Start',p.dlpStartDate||'—','','DLP End',p.dlpStartDate?addMonths(p.dlpStartDate,p.dlpMonths||12):'—',''],
-    ['','','','','',''],
-    // ── Budget Summary ──
-    ['BUDGET SUMMARY','','','','',''],
-    ['CATEGORY','TOTAL (ex GST)','PAID','REMAINING','% PAID',''],
-    ['Renovation',fm(state.budget.filter(b=>b.cat==='Renovation').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0)),
-      fm(state.budget.filter(b=>b.cat==='Renovation').reduce((s,b)=>s+(+b.paidAmt||0),0)),'','',''],
-    ['Permits & Council',fm(t.permitTotal||0),0,'','',''],
-    ['Pest Control',fm(t.pestTotal||0),0,'','',''],
-    ['Sale Costs',fm(t.saleTotal),fm(t.salePaid),'','',''],
-    ['GST (10% on applicable items)',fm(t.gstTotal),'','','',''],
-    ['Contingency ('+( p.contingencyPct||0)+'%)',fm(t.cont),'','','',''],
-    ['GRAND TOTAL (incl. GST + contingency)',fm(t.grand),fm(t.renoPaid),fm(t.grand-t.renoPaid),
-      t.grand>0?Math.round(t.renoPaid/t.grand*100)+'%':'0%',''],
-    ['','','','','',''],
-    // ── Sale Economics ──
-    ['SALE ECONOMICS (estimates only — not financial advice)','','','','',''],
-    ['Target sale price','',fm(salePrice),'','',''],
-    ['Less: Mortgage payout','','−'+fm(p.mortgageBalance||0),'','',''],
-    ['Less: Sale & marketing costs','','−'+fm(saleCosts),'','',''],
-    ['Less: Renovation budget (incl. GST + contingency)','','−'+fm(t.grand),'','',''],
-    ['Estimated net proceeds','',fm(estimatedNet),'','',''],
-    ['','','','','',''],
-    // ── VIC Stamp Duty & CGT ──
-    (()=>{
-      const pp=+p.purchasePrice||0;
-      const sdOverride=+(state.settings?.stampDutyOverridePct||0);
-      let sd=0;
-      if(pp>0){if(sdOverride>0){sd=pp*(sdOverride/100);}else{
-        if(pp<=25000)sd=pp*0.014;else if(pp<=130000)sd=350+(pp-25000)*0.024;
-        else if(pp<=960000)sd=2870+(pp-130000)*0.06;else sd=pp*0.055;
-      }}
-      const costBase=(pp>0?pp:0)+sd+t.grand;
-      const gain=salePrice-costBase;
-      const cgt=gain>0?Math.round(gain*0.5*0.37):0;
-      return ['STAMP DUTY & CGT ESTIMATES (non-PPR)','','','','',''];
-    })(),
-    (()=>{
-      const pp=+p.purchasePrice||0;const sdOverride=+(state.settings?.stampDutyOverridePct||0);
-      let sd=0;if(pp>0){if(sdOverride>0){sd=pp*(sdOverride/100);}else{if(pp<=25000)sd=pp*0.014;else if(pp<=130000)sd=350+(pp-25000)*0.024;else if(pp<=960000)sd=2870+(pp-130000)*0.06;else sd=pp*0.055;}}
-      return ['VIC Stamp Duty (est.)',fm(Math.round(sd)),'','Source: VIC SRO progressive tiers (non-PPR 2024-25)','',''];
-    })(),
-    (()=>{
-      const pp=+p.purchasePrice||0;const sdOverride=+(state.settings?.stampDutyOverridePct||0);
-      let sd=0;if(pp>0){if(sdOverride>0){sd=pp*(sdOverride/100);}else{if(pp<=25000)sd=pp*0.014;else if(pp<=130000)sd=350+(pp-25000)*0.024;else if(pp<=960000)sd=2870+(pp-130000)*0.06;else sd=pp*0.055;}}
-      const costBase=(pp>0?pp:0)+sd+t.grand;
-      const gain=salePrice>0?salePrice-costBase:0;
-      const cgt=gain>0?Math.round(gain*0.5*0.37):0;
-      return ['CGT Estimate (50% discount, 37% marginal)',gain>0?fm(cgt):'n/a (no gain)','','Assumes >12 months hold · Verify with accountant','',''];
-    })(),
-    ['GST Claimable (BAS)',fm(t.gstTotal),'','10% on GST-applicable reno items','',''],
-    ['','','','','',''],
-    // ── Progress Summary ──
-    ['PROJECT PROGRESS','','','','',''],
-    ['Schedule tasks total',tasks.length,'','Done',doneTasks,''],
-    ['Completion %',tasks.length>0?Math.round(doneTasks/tasks.length*100)+'%':'0%','','Overdue tasks',overdueTasks.length,''],
-    ['Planned completion',latestEnd||'—','','Open defects (punch list)',openDefects.length,''],
-    ['High-priority open risks',highRisks.length,'','','',''],
-    ['','','','','',''],
-    // ── Rental Yield ──
-    ['RENTAL YIELD ANALYSIS','','','','',''],
-    ['Current weekly rent',fm(p.currentWeeklyRent||0),'','Current annual',fm((+p.currentWeeklyRent||0)*52),''],
-    ['Target weekly rent (post-reno)',fm(p.targetWeeklyRent||0),'','Target annual',fm((+p.targetWeeklyRent||0)*52),''],
-    ['Annual rent uplift',fm(((+p.targetWeeklyRent||0)-(+p.currentWeeklyRent||0))*52),'','','',''],
-    ['Gross yield (current)',salePrice>0&&p.currentWeeklyRent>0?(+p.currentWeeklyRent*52/salePrice*100).toFixed(2)+'%':'—','',
-     'Gross yield (target)',salePrice>0&&p.targetWeeklyRent>0?(+p.targetWeeklyRent*52/salePrice*100).toFixed(2)+'%':'—',''],
+  // ═══════════════════════════════════════
+  // SHEET 1 · 📊 Project Overview
+  // ═══════════════════════════════════════
+  const pp=+p.purchasePrice||0;
+  const sdOverride=+(state.settings?.stampDutyOverridePct||0);
+  let sd=0;
+  if(pp>0){if(sdOverride>0){sd=pp*(sdOverride/100);}else{
+    if(pp<=25000)sd=pp*0.014;else if(pp<=130000)sd=350+(pp-25000)*0.024;
+    else if(pp<=960000)sd=2870+(pp-130000)*0.06;else sd=pp*0.055;}}
+  const costBase=(pp>0?pp:0)+sd+t.grand;
+  const gain=salePrice>0?salePrice-costBase:0;
+  const cgt=gain>0?Math.round(gain*0.5*0.37):0;
+  const agentPct=+(state.settings?.agentCommissionPct||0);
+  const agentEst=agentPct>0&&salePrice>0?Math.round(salePrice*agentPct/100):0;
+
+  const ov=[
+    [cs(p.name||'Melbourne Renovation Project',sty.title)],
+    [cs(p.address||'Address not set',sty.subtitle),ce(''),ce(''),cs('Generated: '+new Date().toLocaleString('en-AU'),sty.subtitle)],
+    [ce(''),ce(''),ce(''),ce('')],
+    // Project details section
+    [cs('📋  PROJECT DETAILS',sty.secHdr),ce(''),cs('💰  PROPERTY FINANCIALS',sty.secHdr),ce('')],
+    [cs('Property type',sty.kpiKey),cs(p.propertyType||'—',sty.kpiVal),cs('Purchase price',sty.kpiKey),cm(pp,sty.kpiVal)],
+    [cs('Investment strategy',sty.kpiKey),cs(p.investmentStrategy||'—',sty.kpiVal),cs('Target sale price',sty.kpiKey),cm(salePrice,salePrice>0?sty.kpiValG:sty.kpiVal)],
+    [cs('Year built',sty.kpiKey),cs(p.yearBuilt||'—',sty.kpiVal),cs('Mortgage payout',sty.kpiKey),cm(p.mortgageBalance||0,sty.kpiVal)],
+    [cs('Council',sty.kpiKey),cs(p.council||'—',sty.kpiVal),cs('VIC Stamp duty (est.)',sty.kpiKey),cm(Math.round(sd),sty.kpiVal)],
+    [cs('Floor area',sty.kpiKey),cs(p.area>0?(p.area+'m²'):'—',sty.kpiVal),cs('CGT estimate (50% disc.)',sty.kpiKey),gain>0?cm(cgt,sty.kpiVal):cs('n/a (no gain)',sty.kpiVal)],
+    [cs('Start date',sty.kpiKey),cs(p.startDate||'—',sty.kpiVal),cs('Est. agent commission',sty.kpiKey),agentEst>0?cm(agentEst,sty.kpiVal):cs('—',sty.kpiVal)],
+    [cs('DLP start',sty.kpiKey),cs(p.dlpStartDate||'—',sty.kpiVal),cs('',sty.kpiKey),ce('')],
+    [cs('DLP expiry',sty.kpiKey),cs(p.dlpStartDate?addMonths(p.dlpStartDate,p.dlpMonths||12):'—',sty.kpiVal),cs('',sty.kpiKey),ce('')],
+    [ce(''),ce(''),ce(''),ce('')],
+    // Budget summary
+    [cs('📊  BUDGET SUMMARY',sty.secHdr),cs('SUBTOTAL (ex GST)',sty.colHdr),cs('PAID TO DATE',sty.colHdr),cs('REMAINING',sty.colHdr)],
+    (()=>{const items=state.budget.filter(b=>b.cat==='Renovation');const sub=items.reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);const pd=items.reduce((s,b)=>s+(+b.paidAmt||0),0);return[cs('🔨  Renovation',sty.dataE),cm(sub,sty.mono),cm(pd,sty.paid),cm(Math.max(0,sub-pd),pd>=sub?sty.paid:sty.remain)]})(),
+    (()=>{const sub=t.permitTotal||0;return[cs('🏛  Permits & Council',sty.dataO),cm(sub,sty.mono),cm(0,sty.mono),cm(sub,sty.remain)]})(),
+    (()=>{const sub=t.pestTotal||0;return[cs('🐛  Pest Control',sty.dataE),cm(sub,sty.mono),cm(0,sty.mono),cm(sub,sty.remain)]})(),
+    (()=>{return[cs('💰  Sale Costs',sty.dataO),cm(t.saleTotal,sty.mono),cm(t.salePaid,sty.paid),cm(Math.max(0,t.saleTotal-t.salePaid),t.salePaid>=t.saleTotal?sty.paid:sty.remain)]})(),
+    [cs('  GST (10% applicable items)',sty.dataE),cm(t.gstTotal,sty.mono),ce(''),ce('')],
+    [cs('  Contingency ('+( p.contingencyPct||0)+'%)',sty.dataO),cm(t.cont,sty.mono),ce(''),ce('')],
+    [cs('★  GRAND TOTAL (incl. GST + contingency)',sty.grand),cm(t.grand,sty.grand),cm(t.renoPaid,sty.grand),cm(Math.max(0,t.grand-t.renoPaid),sty.grand)],
+    [ce(''),ce(''),ce(''),ce('')],
+    // Sale economics
+    [cs('🏷  SALE ECONOMICS  (estimates only — not financial advice)',sty.secHdr),ce(''),ce(''),ce('')],
+    [cs('Target sale price',sty.kpiKey),ce(''),cm(salePrice,sty.kpiValG),ce('')],
+    [cs('Less: Mortgage payout',sty.kpiKey),ce(''),cm(-(+p.mortgageBalance||0),sty.kpiVal),ce('')],
+    [cs('Less: Sale & marketing costs (from budget)',sty.kpiKey),ce(''),cm(-saleCosts,sty.kpiVal),ce('')],
+    [cs('Less: Reno budget (incl. GST + contingency)',sty.kpiKey),ce(''),cm(-t.grand,sty.kpiVal),ce('')],
+    [cs('= Estimated net to hand',sty.secHdr),ce(''),cm(net,net>=0?sty.kpiValG:sty.kpiValR),ce('')],
+    [cs('Note: Stamp duty, CGT, and legal costs are estimated separately above',sty.note),ce(''),ce(''),ce('')],
+    [ce(''),ce(''),ce(''),ce('')],
+    // Progress
+    [cs('📅  PROJECT PROGRESS',sty.secHdr),ce(''),cs('📋  SCHEDULE STATUS',sty.secHdr),ce('')],
+    [cs('Total schedule tasks',sty.kpiKey),cn(tasks.length,sty.kpiVal),cs('Tasks completed',sty.kpiKey),cn(doneTasks,sty.kpiVal)],
+    [cs('Completion %',sty.kpiKey),cs(tasks.length?Math.round(doneTasks/tasks.length*100)+'%':'0%',sty.kpiVal),cs('Overdue tasks',sty.kpiKey),cn(tasks.filter(tk=>!tk.done&&tk.plannedEnd&&tk.plannedEnd<today).length,sty.kpiVal)],
+    [cs('Planned completion',sty.kpiKey),cs(latestEnd||'—',sty.kpiVal),cs('Open defects (High)',sty.kpiKey),cn((state.punch||[]).filter(d=>d.severity==='High'&&d.status!=='Fixed').length,sty.kpiVal)],
+    [ce(''),ce(''),ce(''),ce('')],
+    // Rental yield
+    [cs('🏠  RENTAL YIELD (keep & hold analysis)',sty.secHdr),ce(''),ce(''),ce('')],
+    [cs('Current weekly rent',sty.kpiKey),cm(+p.currentWeeklyRent||0,sty.kpiVal),cs('Current annual',sty.kpiKey),cm((+p.currentWeeklyRent||0)*52,sty.kpiVal)],
+    [cs('Target weekly rent (post-reno)',sty.kpiKey),cm(+p.targetWeeklyRent||0,sty.kpiValG),cs('Target annual',sty.kpiKey),cm((+p.targetWeeklyRent||0)*52,sty.kpiValG)],
+    [cs('Annual uplift from reno',sty.kpiKey),cm(((+p.targetWeeklyRent||0)-(+p.currentWeeklyRent||0))*52,sty.kpiVal),cs('Gross yield (target)',sty.kpiKey),cs(salePrice>0&&p.targetWeeklyRent>0?((+p.targetWeeklyRent*52/salePrice)*100).toFixed(2)+'%':'—',sty.kpiVal)],
+    [cs('⚠ All figures are estimates. Verify stamp duty with SRO Vic and tax estimates with your accountant.',sty.note),ce(''),ce(''),ce('')],
   ];
-  const ws1=XLSX.utils.aoa_to_sheet(s1);
-  ws1['!cols']=[{wch:42},{wch:22},{wch:18},{wch:36},{wch:18},{wch:5}];
+  const ws1=mkWs(ov);
+  addMerges(ws1,[[0,0,0,3],[1,0,1,1],[3,0,3,1],[3,2,3,3],[12,0,12,3],[22,0,22,3],[28,0,28,3],[29,0,29,3],[36,0,36,3],[40,0,40,3],[43,0,43,3]]);
+  ws1['!cols']=[{wch:40},{wch:22},{wch:36},{wch:18}];
+  ws1['!rows']=[{hpt:28},{hpt:16},{hpt:6},{hpt:18},...Array(40).fill({hpt:18})];
+  freezeRows(ws1,3);
   XLSX.utils.book_append_sheet(wb,ws1,'📊 Project Overview');
 
-  // ──────────────────────────────────────────────
-  // Sheet 2 · 📋 Work Items & Budget
-  // ──────────────────────────────────────────────
-  const CATS_ORDER=['Renovation','Permits & Council','Pest Control','Sale Cost'];
-  const CAT_EMOJI={'Renovation':'🔨','Permits & Council':'🏛','Pest Control':'🐛','Sale Cost':'💰'};
-  const budHdr=['#','Category','Description','Room / Area','Trade','Mode','Priority',
-    'Orig. Est ($)','Current Quote ($)','Qty','Unit','Unit $','GST',
-    'Total ($)','Paid ($)','Remaining ($)','Invoice Date','HIA Milestone','Mat/Lab','Tax Category','Notes'];
-  const budRows=[
-    [p.name+' — Work Items & Budget','','','','','','','','','','','','','','','','','','','',''],
-    ['Generated: '+today,'','','','','','','','','','','','','','','','','','','',''],
-    ['','','','','','','','','','','','','','','','','','','','',''],
-    budHdr,
+  // ═══════════════════════════════════════
+  // SHEET 2 · 📋 Work Items & Budget
+  // ═══════════════════════════════════════
+  const BH=['#','Category','Work Item / Description','Detail Notes','Trade','Mode','Priority',
+    'Orig. Est ($)','Quoted ($)','Qty','Unit','Unit $','GST','Total ($)','Paid ($)','Remaining ($)','Variance ($)',
+    'Invoice Date','HIA Milestone','Mat/Lab','Tax Category','Status','Notes'];
+  const CATS=[
+    {cat:'Renovation',   hdr:'🔨  RENOVATION WORKS',    s:sty.catHdr,  sc:sty.catHdrEm},
+    {cat:'Permits & Council', hdr:'🏛  PERMITS & COUNCIL', s:sty.catHdrV, sc:sty.catHdrV},
+    {cat:'Pest Control', hdr:'🐛  PEST CONTROL',          s:sty.catHdrL, sc:sty.catHdrL},
+    {cat:'Sale Cost',    hdr:'💰  SALE COSTS',             s:sty.catHdrAm,sc:sty.catHdrAm},
   ];
-  let lineNo=0;
-  let grandBudget=0, grandPaid=0, grandTotal=0;
-  CATS_ORDER.forEach(cat=>{
+  const budRows=[
+    [cs(p.name+' — Work Items & Budget',sty.title),...Array(22).fill(ce(''))],
+    [cs('Project: '+p.name+'  |  Address: '+(p.address||'—')+'  |  Generated: '+today,sty.subtitle),...Array(22).fill(ce(''))],
+    [...Array(23).fill(ce(''))],
+    BH.map((h,i)=>cs(h,i===2||i===3||i===21||i===22?sty.colHdrL:sty.colHdr)),
+  ];
+  let lineNo=0, grandBudget=0, grandPaid=0, grandTotal=0;
+  CATS.forEach(({cat,hdr,s,sc})=>{
     const items=state.budget.filter(b=>b.cat===cat);
     if(!items.length)return;
-    // Category header row
-    budRows.push([CAT_EMOJI[cat]+' '+cat.toUpperCase(),'','','','','','','','','','','','','','','','','','','','']);
+    budRows.push([cs(hdr,s),...Array(22).fill(cs('',s))]);
     let catTotal=0,catPaid=0,catBudget=0;
-    items.forEach(b=>{
+    items.forEach((b,rowIdx)=>{
       lineNo++;
       const total=(+b.qty||1)*(+b.unitCost||0);
-      const remaining=Math.max(0,total-(+b.paidAmt||0));
-      catTotal+=total; catPaid+=(+b.paidAmt||0); catBudget+=(+b.originalCost||0)*(+b.qty||1);
+      const remain=Math.max(0,total-(+b.paidAmt||0));
+      const variance=total-(+b.originalCost||0)*(+b.qty||1);
+      catTotal+=total;catPaid+=(+b.paidAmt||0);catBudget+=(+b.originalCost||0)*(+b.qty||1);
+      const isE=rowIdx%2===0;const dS=isE?sty.dataE:sty.dataO;const mS=isE?sty.monoE:sty.mono;const cS=isE?sty.dataCE:sty.dataC;
+      const statusVal=b.paidAmt>0&&(+b.paidAmt||0)>=(total*0.99)?'✓ Paid':b.paidAmt>0?'⚡ Partial':'⏳ Pending';
+      const statusSty=b.paidAmt>0&&(+b.paidAmt||0)>=(total*0.99)?sty.ok:b.paidAmt>0?sty.warn:sty.dataC;
       budRows.push([
-        lineNo, cat, b.description||'', b.room||'', b.trade||'', b.mode||'', stars[b.priority]||b.priority||'',
-        fm((+b.originalCost||0)*(+b.qty||1)), fm((+b.unitCost||0)*(+b.qty||1)),
-        +b.qty||1, b.unit||'lot', fm(+b.unitCost||0), b.gst?'Yes':'No',
-        fm(total), fm(+b.paidAmt||0), fm(remaining),
-        b.invoiceDate||'', b.hia||'', b.mlType||'', b.taxLabel||'', b.notes||''
+        cn(lineNo,cS),
+        cs(cat,dS),
+        cs(b.description||'',dS),
+        cs(b.notes||'',sty.note),
+        cs(b.trade||'',dS),
+        cs(b.mode||'',dS),
+        cs(priLbl(b.priority),priSty(b.priority)),
+        cm((+b.originalCost||0)*(+b.qty||1),mS),
+        cm((+b.unitCost||0)*(+b.qty||1),mS),
+        cn(+b.qty||1,cS),
+        cs(b.unit||'lot',cS),
+        cm(+b.unitCost||0,mS),
+        cs(b.gst?'✓ GST':'No GST',b.gst?sty.ok:sty.dataC),
+        cm(total,mS),
+        cm(+b.paidAmt||0,sty.paid),
+        cm(remain,remain>0?sty.remain:sty.paid),
+        cm(variance,variance>0?{...sty.remain}:variance<0?{...sty.ok}:sty.mono),
+        cs(b.invoiceDate||'',dS),
+        cs(b.hia||'',dS),
+        cs(b.mlType||'',cS),
+        cs(b.taxLabel||'',dS),
+        cs(statusVal,statusSty),
+        cs(b.notes||'',dS),
       ]);
     });
-    // Category subtotal
-    budRows.push(['','','','','','','['+cat+' SUBTOTAL]','',fm(catBudget),'','','',
-      '',fm(catTotal),fm(catPaid),fm(Math.max(0,catTotal-catPaid)),'','','','','']);
-    budRows.push(['','','','','','','','','','','','','','','','','','','','','']);
-    grandBudget+=catBudget; grandPaid+=catPaid; grandTotal+=catTotal;
+    const empC=Array(23).fill(cs('',sty.subtot));
+    empC[0]=cs('  SUBTOTAL — '+cat,sty.subtotL);
+    empC[7]=cm(catBudget,sty.subtot);
+    empC[8]=cm(catTotal,sty.subtot);
+    empC[13]=cm(catTotal,sty.subtot);
+    empC[14]=cm(catPaid,{...sty.subtot,fill:{fgColor:{rgb:C.emeraldBg}},font:{bold:true,sz:9,color:{rgb:C.emerald},name:'Arial'}});
+    empC[15]=cm(Math.max(0,catTotal-catPaid),sty.subtot);
+    budRows.push(empC);
+    budRows.push(Array(23).fill(ce('')));
+    grandBudget+=catBudget;grandPaid+=catPaid;grandTotal+=catTotal;
   });
-  budRows.push(['','','','','','','★ GRAND TOTAL (ex GST + contingency)','',fm(grandBudget),'','','','',
-    fm(grandTotal),fm(grandPaid),fm(Math.max(0,grandTotal-grandPaid)),'','','','','']);
-  budRows.push(['','','','','','','★ GST (10% on applicable items)','','','','','','',fm(t.gstTotal),'','','','','','','']);
-  budRows.push(['','','','','','','★ Contingency ('+( p.contingencyPct||0)+'%)','','','','','','',fm(t.cont),'','','','','','','']);
-  budRows.push(['','','','','','','★ GRAND TOTAL (incl. GST + contingency)','','','','','','',fm(t.grand),fm(t.renoPaid),fm(Math.max(0,t.grand-t.renoPaid)),'','','','','']);
-  const ws2=XLSX.utils.aoa_to_sheet(budRows);
-  ws2['!cols']=[{wch:4},{wch:16},{wch:38},{wch:18},{wch:18},{wch:8},{wch:8},
-    {wch:14},{wch:16},{wch:5},{wch:7},{wch:10},{wch:5},
-    {wch:14},{wch:12},{wch:14},{wch:14},{wch:22},{wch:8},{wch:28},{wch:35}];
+  const gRow=Array(23).fill(cs('',sty.grand));
+  gRow[0]=cs('GRAND TOTAL (ex GST + contingency)',sty.grandL);
+  gRow[7]=cm(grandBudget,sty.grand);
+  gRow[8]=cm(grandTotal,sty.grand);
+  gRow[13]=cm(grandTotal,sty.grand);
+  gRow[14]=cm(grandPaid,sty.grand);
+  gRow[15]=cm(Math.max(0,grandTotal-grandPaid),sty.grand);
+  budRows.push(gRow);
+  const gRow2=Array(23).fill(cs('',sty.grand));
+  gRow2[0]=cs('  + GST (10% on applicable items)',sty.grandL);
+  gRow2[13]=cm(t.gstTotal,sty.grand);
+  budRows.push(gRow2);
+  const gRow3=Array(23).fill(cs('',sty.grand));
+  gRow3[0]=cs('  + Contingency ('+( p.contingencyPct||0)+'%)',sty.grandL);
+  gRow3[13]=cm(t.cont,sty.grand);
+  budRows.push(gRow3);
+  const gRow4=Array(23).fill(cs('',sty.grand));
+  gRow4[0]=cs('★  GRAND TOTAL (incl. GST + contingency)',sty.grandL);
+  gRow4[13]=cm(t.grand,sty.grand);
+  gRow4[14]=cm(t.renoPaid,sty.grand);
+  gRow4[15]=cm(Math.max(0,t.grand-t.renoPaid),sty.grand);
+  budRows.push(gRow4);
+
+  const ws2=mkWs(budRows);
+  addMerges(ws2,[[0,0,0,22],[1,0,1,22],[2,0,2,22]]);
+  ws2['!cols']=[{wch:4},{wch:16},{wch:36},{wch:30},{wch:16},{wch:8},{wch:9},{wch:14},{wch:14},{wch:5},{wch:6},{wch:11},{wch:8},{wch:14},{wch:13},{wch:13},{wch:12},{wch:13},{wch:20},{wch:7},{wch:26},{wch:11},{wch:28}];
+  ws2['!rows']=[{hpt:24},{hpt:14},{hpt:6},{hpt:32},...Array(200).fill({hpt:30})];
+  freezeRows(ws2,4);
   XLSX.utils.book_append_sheet(wb,ws2,'📋 Work Items & Budget');
 
-  // ──────────────────────────────────────────────
-  // Sheet 3 · 📞 Contacts & Suppliers
-  // ──────────────────────────────────────────────
-  const contHdr=['Role / Trade','Name','Company','Phone','Email','VBA Licence #','ABN','Insurance Expiry','Rating','Notes'];
+  // ═══════════════════════════════════════
+  // SHEET 3 · 📞 Contacts & Suppliers
+  // ═══════════════════════════════════════
+  const CH=['Role / Trade','Name','Company','Phone','Email','VBA Licence #','ABN','Insurance Expiry','Ins. Status','Rating','Notes'];
   const contRows=[
-    [p.name+' — Contacts & Suppliers','','','','','','','','',''],
-    ['','','','','','','','','',''],
-    contHdr,
+    [cs(p.name+' — Contacts & Suppliers',sty.title),...Array(10).fill(ce(''))],
+    [cs('Keep this list current — verify insurance before engaging any trade.',sty.subtitle),...Array(10).fill(ce(''))],
+    Array(11).fill(ce('')),
+    CH.map((h,i)=>cs(h,i===10?sty.colHdrL:sty.colHdr)),
   ];
-  if(state.contacts&&state.contacts.length){
-    state.contacts.forEach(c=>{
-      const today2=isoToday();
-      const dLeft=c.insuranceExpiry?daysBetween(today2,c.insuranceExpiry):-1;
-      const insStatus=dLeft<0&&c.insuranceExpiry?'EXPIRED':dLeft>=0&&dLeft<=30?'Expiring in '+dLeft+'d':'';
-      contRows.push([c.role||'',c.name||'',c.company||'',c.phone||'',c.email||'',
-        c.license||'',c.abn||'',c.insuranceExpiry||'',
-        ['','★','★★','★★★','★★★★','★★★★★'][+c.rating||0]||'',
-        (c.notes||'')+(insStatus?' ⚠ '+insStatus:'')]);
-    });
-  } else {
-    contRows.push(['No contacts added yet','','','','','','','','','']);
-  }
-  const ws3=XLSX.utils.aoa_to_sheet(contRows);
-  ws3['!cols']=[{wch:20},{wch:22},{wch:26},{wch:16},{wch:30},{wch:18},{wch:16},{wch:16},{wch:8},{wch:40}];
+  const today2=isoToday();
+  (state.contacts||[]).forEach((c,i)=>{
+    const insExp=c.insuranceExpiry||'';
+    const dLeft=insExp?daysBetween(today2,insExp):-1;
+    const insStatus=insExp?(dLeft<0?'⛔ EXPIRED':dLeft<=30?'⚠ Expiring '+dLeft+'d':'✓ Valid'):insExp?'?':'—';
+    const insSty=insExp?(dLeft<0?sty.bad:dLeft<=30?sty.warn:sty.ok):sty.dataC;
+    const isE=i%2===0;const dS=isE?sty.dataE:sty.dataO;
+    contRows.push([
+      cs(c.role||'',dS),cs(c.name||'',dS),cs(c.company||'',dS),
+      cs(c.phone||'',dS),cs(c.email||'',dS),cs(c.license||'',dS),
+      cs(c.abn||'',dS),cs(insExp||'',dS),cs(insStatus,insSty),
+      cs(['','★','★★','★★★','★★★★','★★★★★'][+c.rating||0]||'',dS),
+      cs(c.notes||'',dS),
+    ]);
+  });
+  if(!state.contacts||!state.contacts.length)
+    contRows.push([cs('No contacts added yet — add your builder and trades in the Contacts tab.',sty.note),...Array(10).fill(ce(''))]);
+  const ws3=mkWs(contRows);
+  addMerges(ws3,[[0,0,0,10],[1,0,1,10],[2,0,2,10]]);
+  ws3['!cols']=[{wch:20},{wch:22},{wch:26},{wch:16},{wch:30},{wch:18},{wch:16},{wch:16},{wch:16},{wch:8},{wch:40}];
+  ws3['!rows']=[{hpt:24},{hpt:14},{hpt:6},{hpt:28},...Array(50).fill({hpt:20})];
+  freezeRows(ws3,4);
   XLSX.utils.book_append_sheet(wb,ws3,'📞 Contacts & Suppliers');
 
-  // ──────────────────────────────────────────────
-  // Sheet 4 · 📅 Schedule
-  // ──────────────────────────────────────────────
-  const schHdr=['#','Task','Trade','Room','Mode','Priority','Planned Start','Planned End','Duration (d)',
-    'Actual Start','Actual End','Done','Depends On','Status','Notes'];
+  // ═══════════════════════════════════════
+  // SHEET 4 · 📅 Schedule
+  // ═══════════════════════════════════════
+  const SH=['#','Task / Work Item','Trade','Room','Mode','Priority','Planned Start','Planned End','Duration (d)','Actual Start','Actual End','Done','Depends On','Status','Task Notes'];
   const schRows=[
-    [p.name+' — Construction Schedule','','','','','','','','','','','','','',''],
-    ['','','','','','','','','','','','','','',''],
-    schHdr,
+    [cs(p.name+' — Construction Schedule',sty.title),...Array(14).fill(ce(''))],
+    [cs('Completion: '+Math.round(doneTasks/(tasks.length||1)*100)+'%  |  '+doneTasks+'/'+tasks.length+' tasks done  |  Planned completion: '+(latestEnd||'—'),sty.subtitle),...Array(14).fill(ce(''))],
+    Array(15).fill(ce('')),
+    SH.map((h,i)=>cs(h,[0,11,12,13,14].includes(i)?sty.colHdr:sty.colHdrL)),
   ];
   const today3=isoToday();
-  state.schedule.forEach((s,i)=>{
+  tasks.forEach((s,i)=>{
     const dur=s.plannedStart&&s.plannedEnd?daysBetween(s.plannedStart,s.plannedEnd):0;
-    const status=s.done?'Done':!s.done&&s.plannedEnd&&s.plannedEnd<today3?'Overdue':
-      !s.done&&s.plannedStart&&s.plannedStart<=today3&&(!s.plannedEnd||s.plannedEnd>=today3)?'In Progress':'Scheduled';
-    schRows.push([i+1,s.task||'',s.trade||'',s.room||'',s.mode||'',stars[s.priority]||s.priority||'',
-      s.plannedStart||'',s.plannedEnd||'',dur||'',
-      s.actualStart||'',s.actualEnd||'',s.done?'✓':'',s.deps||'',status,s.taskNotes||'']);
+    const isDone=s.done;const isOD=!isDone&&s.plannedEnd&&s.plannedEnd<today3;
+    const isActive=!isDone&&s.plannedStart&&s.plannedStart<=today3&&(!s.plannedEnd||s.plannedEnd>=today3);
+    const statusVal=isDone?'✓ Done':isOD?'⛔ Overdue':isActive?'⚡ Active':'⏳ Scheduled';
+    const statusSty=isDone?sty.ok:isOD?sty.bad:isActive?sty.warn:sty.dataC;
+    const isE=i%2===0;const dS=isE?sty.dataE:sty.dataO;const mS=isE?sty.dataCE:sty.dataC;
+    schRows.push([
+      cn(i+1,mS),cs(s.task||'',dS),cs(s.trade||'',dS),cs(s.room||'',dS),cs(s.mode||'',dS),
+      cs(priLbl(s.priority),priSty(s.priority)),
+      cs(s.plannedStart||'',dS),cs(s.plannedEnd||'',dS),cn(dur,mS),
+      cs(s.actualStart||'',dS),cs(s.actualEnd||'',dS),
+      cs(isDone?'✓':'',mS),cs(s.deps||'',dS),cs(statusVal,statusSty),cs(s.taskNotes||'',sty.note),
+    ]);
   });
-  // Completion summary
-  schRows.push(['','','','','','','','','','','','','','','']);
-  schRows.push(['SUMMARY','Total tasks',state.schedule.length,'Done',doneTasks,'Completion',
-    state.schedule.length?Math.round(doneTasks/state.schedule.length*100)+'%':'0%',
-    'Planned completion',latestEnd||'—','','','','','','']);
-  const ws4=XLSX.utils.aoa_to_sheet(schRows);
-  ws4['!cols']=[{wch:4},{wch:36},{wch:16},{wch:16},{wch:8},{wch:8},
-    {wch:14},{wch:14},{wch:10},{wch:14},{wch:14},{wch:6},{wch:30},{wch:12},{wch:40}];
+  const ws4=mkWs(schRows);
+  addMerges(ws4,[[0,0,0,14],[1,0,1,14],[2,0,2,14]]);
+  ws4['!cols']=[{wch:4},{wch:36},{wch:16},{wch:14},{wch:8},{wch:9},{wch:13},{wch:13},{wch:10},{wch:13},{wch:13},{wch:6},{wch:28},{wch:11},{wch:40}];
+  ws4['!rows']=[{hpt:24},{hpt:14},{hpt:6},{hpt:28},...Array(100).fill({hpt:20})];
+  freezeRows(ws4,4);
   XLSX.utils.book_append_sheet(wb,ws4,'📅 Schedule');
 
-  // ──────────────────────────────────────────────
-  // Sheet 5 · 🏗 Progress Claims
-  // ──────────────────────────────────────────────
-  const clmHdr=['Claim #','Claim Date','HIA Milestone','Amount ($)','Invoice Ref','Status','Date Paid','Notes'];
-  const clmRows=[
-    [p.name+' — Progress Claims','','','','','','',''],
-    ['','','','','','','',''],
-    clmHdr,
-  ];
+  // ═══════════════════════════════════════
+  // SHEET 5 · 🏗 Progress Claims
+  // ═══════════════════════════════════════
+  const CLH=['Claim #','Claim Date','HIA Milestone','Amount ($)','Invoice Ref','Status','Date Paid','Notes'];
   const claims=state.claims||[];
-  claims.forEach(c=>clmRows.push([c.claimNo||'',c.date||'',c.milestone||'',fm(+c.amount||0),
-    c.invoiceRef||'',c.status||'',c.paidDate||'',c.notes||'']));
   const totalClaimed=claims.reduce((s,c)=>s+(+c.amount||0),0);
-  const totalPaid=claims.filter(c=>c.status==='Paid').reduce((s,c)=>s+(+c.amount||0),0);
-  clmRows.push(['','','','','','','','']);
-  clmRows.push(['','TOTAL CLAIMED','',fm(totalClaimed),'','','','']);
-  clmRows.push(['','TOTAL PAID (status=Paid)','',fm(totalPaid),'','','','']);
-  clmRows.push(['','OUTSTANDING','',fm(Math.max(0,totalClaimed-totalPaid)),'','','','']);
-  const ws5=XLSX.utils.aoa_to_sheet(clmRows);
+  const totalPaid2=claims.filter(c=>c.status==='Paid').reduce((s,c)=>s+(+c.amount||0),0);
+  const clmRows=[
+    [cs(p.name+' — Progress Claims',sty.title),...Array(7).fill(ce(''))],
+    [cs('Total claimed: '+fm(totalClaimed)+'  |  Total paid: '+fm(totalPaid2)+'  |  Outstanding: '+fm(Math.max(0,totalClaimed-totalPaid2)),sty.subtitle),...Array(7).fill(ce(''))],
+    Array(8).fill(ce('')),
+    CLH.map((h,i)=>cs(h,[0,6].includes(i)?sty.colHdr:sty.colHdrL)),
+  ];
+  claims.forEach((c,i)=>{
+    const isPaid=c.status==='Paid';const isDisp=c.status==='Disputed';
+    const styStat=isPaid?sty.ok:isDisp?sty.bad:sty.warn;
+    const isE=i%2===0;const dS=isE?sty.dataE:sty.dataO;
+    clmRows.push([
+      cn(c.claimNo||i+1,sty.dataC),cs(c.date||'',dS),cs(c.milestone||'',dS),
+      cm(+c.amount||0,sty.mono),cs(c.invoiceRef||'',dS),
+      cs(c.status||'',styStat),cs(c.paidDate||'',dS),cs(c.notes||'',sty.note),
+    ]);
+  });
+  if(!claims.length)clmRows.push([cs('No progress claims recorded yet.',sty.note),...Array(7).fill(ce(''))]);
+  const totR=Array(8).fill(cs('',sty.subtot));
+  totR[2]=cs('TOTAL CLAIMED',sty.subtotL);totR[3]=cm(totalClaimed,sty.subtot);
+  clmRows.push(totR);
+  const paidR=Array(8).fill(cs('',sty.subtot));
+  paidR[2]=cs('TOTAL PAID',sty.subtotL);paidR[3]=cm(totalPaid2,{...sty.subtot,fill:{fgColor:{rgb:C.emeraldBg}},font:{bold:true,sz:9,color:{rgb:C.emerald},name:'Arial'}});
+  clmRows.push(paidR);
+  const outR=Array(8).fill(cs('',sty.grand));
+  outR[2]=cs('OUTSTANDING',sty.grandL);outR[3]=cm(Math.max(0,totalClaimed-totalPaid2),sty.grand);
+  clmRows.push(outR);
+  const ws5=mkWs(clmRows);
+  addMerges(ws5,[[0,0,0,7],[1,0,1,7],[2,0,2,7]]);
   ws5['!cols']=[{wch:8},{wch:14},{wch:24},{wch:14},{wch:16},{wch:12},{wch:14},{wch:40}];
+  ws5['!rows']=[{hpt:24},{hpt:14},{hpt:6},{hpt:28},...Array(50).fill({hpt:20})];
+  freezeRows(ws5,4);
   XLSX.utils.book_append_sheet(wb,ws5,'🏗 Progress Claims');
 
-  // ──────────────────────────────────────────────
-  // Sheet 6 · 🔍 VBA Inspections
-  // ──────────────────────────────────────────────
+  // ═══════════════════════════════════════
+  // SHEET 6-12: remaining sheets (styled)
+  // ═══════════════════════════════════════
+  function styledSimpleSheet(title,subtitle,headers,rows,colWidths,sheetName){
+    const sr=[[cs(title,sty.title),...Array(headers.length-1).fill(ce(''))],
+      [cs(subtitle,sty.subtitle),...Array(headers.length-1).fill(ce(''))],
+      Array(headers.length).fill(ce('')),
+      headers.map((h,i)=>cs(h,i===0||i===1?sty.colHdrL:sty.colHdr))];
+    rows.forEach((row,ri)=>{
+      const isE=ri%2===0;
+      sr.push(row.map((v,ci)=>{
+        if(typeof v==='number')return cm(v,isE?sty.monoE:sty.mono);
+        return cs(v??'',isE?sty.dataE:sty.dataO);
+      }));
+    });
+    const ws=mkWs(sr);
+    addMerges(ws,[[0,0,0,headers.length-1],[1,0,1,headers.length-1],[2,0,2,headers.length-1]]);
+    ws['!cols']=(colWidths||[]).map(w=>({wch:w}));
+    ws['!rows']=[{hpt:24},{hpt:14},{hpt:6},{hpt:28},...Array(rows.length+5).fill({hpt:20})];
+    freezeRows(ws,4);
+    XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  }
+
   const insHdr=['Stage','Description','Mandatory','Planned Date','Actual Date','Inspector','Result','Notes'];
-  const insRows=[
-    [p.name+' — VBA Mandatory Inspections','','','','','','',''],
-    ['All permitted works require mandatory inspections under Building Act 1993 (Vic)','','','','','','',''],
-    ['','','','','','','',''],
-    insHdr,
-  ];
-  (state.inspections||[]).forEach(ins=>insRows.push([
-    ins.stage||'',ins.description||'',ins.mandatory?'✓ Mandatory':'Optional',
-    ins.plannedDate||'',ins.actualDate||'',ins.inspector||'',ins.result||'',ins.notes||'']));
-  const ws6=XLSX.utils.aoa_to_sheet(insRows);
-  ws6['!cols']=[{wch:20},{wch:55},{wch:12},{wch:14},{wch:14},{wch:22},{wch:10},{wch:40}];
-  XLSX.utils.book_append_sheet(wb,ws6,'🔍 VBA Inspections');
+  styledSimpleSheet(p.name+' — VBA Mandatory Inspections',
+    'All permitted works require mandatory inspections under Building Act 1993 (Vic)',insHdr,
+    (state.inspections||[]).map(ins=>[ins.stage||'',ins.description||'',ins.mandatory?'✓ Mandatory':'Optional',ins.plannedDate||'',ins.actualDate||'',ins.inspector||'',ins.result||'',ins.notes||'']),
+    [20,55,12,14,14,22,10,40],'🔍 VBA Inspections');
 
-  // ──────────────────────────────────────────────
-  // Sheet 7 · ⚖ VIC Compliance
-  // ──────────────────────────────────────────────
-  const compHdr=['Item','Category','Legislative Reference','Est. Cost ($)','Due Date','Completed Date','Done','Notes'];
-  const compRows=[
-    [p.name+' — VIC Compliance Checklist','','','','','','',''],
-    ['Reference: Residential Tenancies Act 2021 (Vic), Building Act 1993, Building Regulations 2018','','','','','','',''],
-    ['','','','','','','',''],
-    compHdr,
-  ];
-  (state.compliance||[]).forEach(c=>compRows.push([
-    c.item||'',c.category||'',c.reference||'',+c.cost||0,
-    c.dueDate||'',c.doneDate||'',c.doneDate?'✓':'',c.notes||'']));
-  const ws7=XLSX.utils.aoa_to_sheet(compRows);
-  ws7['!cols']=[{wch:58},{wch:16},{wch:42},{wch:12},{wch:14},{wch:14},{wch:6},{wch:42}];
-  XLSX.utils.book_append_sheet(wb,ws7,'⚖ VIC Compliance');
+  const compHdr=['Item','Category','Legislative Reference','Est. Cost ($)','Due Date','Completed','Done','Notes'];
+  styledSimpleSheet(p.name+' — VIC Compliance Checklist',
+    'Reference: Residential Tenancies Act 2021, Building Act 1993, Building Regulations 2018',compHdr,
+    (state.compliance||[]).map(c=>[c.item||'',c.category||'',c.reference||'',+c.cost||0,c.dueDate||'',c.doneDate||'',c.doneDate?'✓':'',c.notes||'']),
+    [55,16,42,12,14,14,6,42],'⚖ VIC Compliance');
 
-  // ──────────────────────────────────────────────
-  // Sheet 8 · 📝 Site Diary
-  // ──────────────────────────────────────────────
   const dryHdr=['Date','Weather','People on Site / Trades Present','Site Notes & Progress'];
-  const dryRows=[
-    [p.name+' — Site Diary','','',''],
-    ['Address: '+( p.address||'—'),'','',''],
-    ['','','',''],
-    dryHdr,
-  ];
-  [...(state.diary||[])].sort((a,b)=>a.date>b.date?1:-1)
-    .forEach(d=>dryRows.push([d.date||'',d.weather||'',d.people||'',d.notes||'']));
-  const ws8=XLSX.utils.aoa_to_sheet(dryRows);
-  ws8['!cols']=[{wch:14},{wch:18},{wch:45},{wch:80}];
-  XLSX.utils.book_append_sheet(wb,ws8,'📝 Site Diary');
+  styledSimpleSheet(p.name+' — Site Diary','Address: '+(p.address||'—'),dryHdr,
+    [...(state.diary||[])].sort((a,b)=>a.date>b.date?1:-1).map(d=>[d.date||'',d.weather||'',d.people||'',d.notes||'']),
+    [14,18,45,80],'📝 Site Diary');
 
-  // ──────────────────────────────────────────────
-  // Sheet 9 · 🏡 OFI Checklist
-  // ──────────────────────────────────────────────
   const ofiHdr=['✓','Room / Zone','Checklist Item','Notes'];
-  const ofiRows=[
-    [p.name+' — Open for Inspection Checklist','','',''],
-    ['Complete before every Open for Inspection (allow 30 min)','','',''],
-    ['','','',''],
-    ofiHdr,
-  ];
-  let lastRoom='';
+  const ofiDataRows=[]; let lastRoom2='';
   (state.ofi||[]).forEach(o=>{
-    if(o.room!==lastRoom){
-      if(lastRoom)ofiRows.push(['','','','']);
-      ofiRows.push(['— '+o.room.toUpperCase()+' —','','','']);
-      lastRoom=o.room;
-    }
-    ofiRows.push([o.checked?'✓':'○',o.room||'',o.item||'',o.notes||'']);
+    if(o.room!==lastRoom2){ofiDataRows.push(['— '+o.room.toUpperCase()+' —','','','']);lastRoom2=o.room;}
+    ofiDataRows.push([o.checked?'✓':'○',o.room||'',o.item||'',o.notes||'']);
   });
-  const checkedCount=(state.ofi||[]).filter(o=>o.checked).length;
-  const totalOfi=(state.ofi||[]).length;
-  ofiRows.push(['','','','']);
-  ofiRows.push([checkedCount+'/'+totalOfi+' complete','','','']);
-  const ws9=XLSX.utils.aoa_to_sheet(ofiRows);
-  ws9['!cols']=[{wch:6},{wch:18},{wch:58},{wch:35}];
-  XLSX.utils.book_append_sheet(wb,ws9,'🏡 OFI Checklist');
+  styledSimpleSheet(p.name+' — Open for Inspection Checklist','Complete before every Open for Inspection — allow 30 minutes',ofiHdr,ofiDataRows,[6,18,58,35],'🏡 OFI Checklist');
 
-  // ──────────────────────────────────────────────
-  // Sheet 10 · ⚠ Risk Register
-  // ──────────────────────────────────────────────
   const rskHdr=['#','Risk Description','Category','Likelihood','Impact','Risk Rating','Mitigation Strategy','Owner','Status'];
-  const rskRows=[
-    [p.name+' — Risk Register','','','','','','','',''],
-    ['','','','','','','','',''],
-    rskHdr,
-  ];
   const riskScore={'Low':1,'Medium':2,'High':3};
-  (state.risks||[]).forEach((r,i)=>{
-    const rating=(riskScore[r.likelihood]||0)*(riskScore[r.impact]||0);
-    const ratingLabel=rating>=6?'HIGH':rating>=3?'MEDIUM':'LOW';
-    rskRows.push([i+1,r.risk||'',r.category||'',r.likelihood||'',r.impact||'',ratingLabel,
-      r.mitigation||'',r.owner||'',r.status||'']);
-  });
-  const ws10=XLSX.utils.aoa_to_sheet(rskRows);
-  ws10['!cols']=[{wch:4},{wch:42},{wch:16},{wch:12},{wch:10},{wch:12},{wch:55},{wch:14},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws10,'⚠ Risk Register');
+  styledSimpleSheet(p.name+' — Risk Register','Likelihood × Impact rating: High×High=HIGH, etc.',rskHdr,
+    (state.risks||[]).map((r,i)=>{const rating=(riskScore[r.likelihood]||0)*(riskScore[r.impact]||0);return[i+1,r.risk||'',r.category||'',r.likelihood||'',r.impact||'',rating>=6?'HIGH':rating>=3?'MEDIUM':'LOW',r.mitigation||'',r.owner||'',r.status||''];}),
+    [4,42,16,12,10,10,55,14,10],'⚠ Risk Register');
 
-  // ──────────────────────────────────────────────
-  // Sheet 11 · 💬 Quote Comparison
-  // ──────────────────────────────────────────────
-  const qtHdr=['Scope of Work','Trade','Company','Contact Person','Phone','Quote Amount ($)','Quote Date','Status','Notes'];
-  const qtRows=[
-    [p.name+' — Quote Comparison Register','','','','','','','',''],
-    ['Use this sheet to compare quotes for each trade/scope. Accepted quotes should be entered in Work Items sheet.','','','','','','','',''],
-    ['','','','','','','','',''],
-    qtHdr,
-  ];
-  (state.quotes||[]).forEach(q=>qtRows.push([q.scope||'',q.trade||'',q.company||'',q.contactName||'',
-    q.phone||'',fm(+q.amount||0),q.date||'',q.status||'',q.notes||'']));
-  const ws11=XLSX.utils.aoa_to_sheet(qtRows);
-  ws11['!cols']=[{wch:40},{wch:16},{wch:28},{wch:20},{wch:16},{wch:14},{wch:14},{wch:14},{wch:38}];
-  XLSX.utils.book_append_sheet(wb,ws11,'💬 Quote Comparison');
+  styledSimpleSheet(p.name+' — Quote Comparison Register','Use this register to compare quotes per trade. Accepted quotes → add to Work Items & Budget sheet.',
+    ['Scope of Work','Trade','Company','Contact','Phone','Quote ($)','Date','Status','Notes'],
+    (state.quotes||[]).map(q=>[q.scope||'',q.trade||'',q.company||'',q.contactName||'',q.phone||'',+q.amount||0,q.date||'',q.status||'',q.notes||'']),
+    [40,16,28,20,16,14,14,14,38],'💬 Quote Comparison');
 
-  // ──────────────────────────────────────────────
-  // Sheet 12 · 🔨 Defects & Punch List
-  // ──────────────────────────────────────────────
-  const pnHdr=['#','Description','Room / Location','Trade Responsible','Severity','Status','Reported Date','Resolved Date','Notes'];
-  const pnRows=[
-    [p.name+' — Defects & Punch List (DLP)','','','','','','','',''],
-    ['DLP Start: '+(p.dlpStartDate||'—')+'  |  DLP End: '+(p.dlpStartDate?addMonths(p.dlpStartDate,p.dlpMonths||12):'—')+'  |  Report defects in writing to builder within DLP period','','','','','','','',''],
-    ['','','','','','','','',''],
-    pnHdr,
-  ];
-  const sevOrder=['High','Medium','Low'];
-  sevOrder.forEach(sev=>{
+  const pnHdr=['#','Description','Room / Location','Trade Responsible','Severity','Status','Reported','Resolved','Notes'];
+  const pnRows=[];
+  ['High','Medium','Low'].forEach(sev=>{
     const items=(state.punch||[]).filter(d=>d.severity===sev);
     if(!items.length)return;
-    pnRows.push(['— '+sev.toUpperCase()+' PRIORITY —','','','','','','','','']);
-    items.forEach((d,i)=>pnRows.push([i+1,d.description||'',d.location||'',d.trade||'',d.severity||'',
-      d.status||'',d.reportedDate||d.date||'',d.resolvedDate||'',d.notes||'']));
+    pnRows.push(['— '+sev.toUpperCase()+' PRIORITY DEFECTS —','','','','','','','','']);
+    items.forEach((d,i)=>pnRows.push([i+1,d.description||'',d.location||'',d.trade||'',d.severity||'',d.status||'',d.reportedDate||d.date||'',d.resolvedDate||'',d.notes||'']));
   });
-  const openHigh=(state.punch||[]).filter(d=>d.severity==='High'&&d.status!=='Fixed').length;
-  pnRows.push(['','','','','','','','','']);
-  pnRows.push(['OPEN DEFECTS: '+( (state.punch||[]).filter(d=>d.status!=='Fixed').length),
-    'HIGH SEVERITY OPEN: '+openHigh,'','','','','','','']);
-  const ws12=XLSX.utils.aoa_to_sheet(pnRows);
-  ws12['!cols']=[{wch:4},{wch:40},{wch:20},{wch:20},{wch:10},{wch:10},{wch:14},{wch:14},{wch:38}];
-  XLSX.utils.book_append_sheet(wb,ws12,'🔨 Defects & Punch List');
+  styledSimpleSheet(p.name+' — Defects & Punch List',
+    'DLP: '+(p.dlpStartDate||'—')+' → '+(p.dlpStartDate?addMonths(p.dlpStartDate,p.dlpMonths||12):'—')+'  |  Document all defects in writing within DLP period',
+    pnHdr,pnRows,[4,40,20,20,10,10,14,14,38],'🔨 Defects & Punch List');
 
-  // ── Save ──
-  const fn=`${(p.name||'Project').replace(/[^a-zA-Z0-9一-龥]/g,'_')}_Reno_Master_${today}.xlsx`;
+  // ─── Save ───
+  const fn=(p.name||'Project').replace(/[^a-zA-Z0-9一-鿿]/g,'_')+'_Reno_Master_'+today+'.xlsx';
   XLSX.writeFile(wb,fn);
-  showToast('📊 Excel exported — '+fn.slice(0,40));
+  showToast('📊 Excel exported ('+fn.slice(0,35)+')');
 }
 
 
@@ -3873,7 +3957,7 @@ async function attemptLogin(){
 }
 
 function initAuth(){
-  if(sessionStorage.getItem(AUTH_KEY)==='1'){
+  if(sessionStorage.getItem('mrm_auth_session')==='1'){
     document.getElementById('login-overlay').style.display='none';
     document.getElementById('app-root').style.display='';
     return;
