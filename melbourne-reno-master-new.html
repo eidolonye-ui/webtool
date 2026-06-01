@@ -1242,13 +1242,15 @@ function wireContacts(){
     state.contacts.push({id:uid(),name:'',role:'',company:'',phone:'',email:'',license:'',abn:'',insuranceExpiry:'',rating:'',notes:''});
     saveCurrentProject();renderContacts();
   });
-  $('contacts-tbody').addEventListener('input',e=>{
+  function _contactSave(e){
     const tr=e.target.closest('tr[data-cid]');
     if(!tr)return;
     const c=state.contacts.find(x=>x.id===tr.dataset.cid);
-    if(c)c[e.target.dataset.f]=e.target.value;
+    if(c&&e.target.dataset.f)c[e.target.dataset.f]=e.target.value;
     saveCurrentProject();
-  });
+  }
+  $('contacts-tbody').addEventListener('input',_contactSave);
+  $('contacts-tbody').addEventListener('change',_contactSave); // select/date on Safari
   $('contacts-tbody').addEventListener('click',e=>{
     if(!e.target.classList.contains('c-del'))return;
     const tr=e.target.closest('tr[data-cid]');
@@ -1475,7 +1477,7 @@ function wireBudget(){
   });
 
   const tbody=$('budget-tbody');
-  tbody.addEventListener('input',e=>{
+  function _budgetSaveHandler(e){
     const tr=e.target.closest('tr[data-bid]')||e.target.closest('tr[data-bexp]');
     if(!tr)return;
     const id=tr.dataset.bid||tr.dataset.bexp;
@@ -1505,7 +1507,9 @@ function wireBudget(){
     $('b-sum-paid').textContent=fmtMoney(t.renoPaid);
     $('b-sum-saletotal').textContent=fmtMoney(t.saleTotal);
     $('b-sum-salepaid').textContent=fmtMoney(t.salePaid);
-  });
+  }
+  tbody.addEventListener('input',_budgetSaveHandler);
+  tbody.addEventListener('change',_budgetSaveHandler); // select dropdowns on Safari
 
   tbody.addEventListener('click',e=>{
     if(e.target.classList.contains('b-del')){
@@ -1579,7 +1583,8 @@ function wireClaims(){
     const c=(state.claims||[]).find(x=>x.id===tr.dataset.clid);
     if(!c)return;
     const f=e.target.dataset.f;
-    if(f==='amount'||f==='claimNo')c[f]=parseFloat(e.target.value)||0;
+    if(f==='amount')c[f]=Math.max(0,parseFloat(e.target.value)||0);
+    else if(f==='claimNo')c[f]=Math.max(1,parseInt(e.target.value)||1);
     else c[f]=e.target.value;
     saveCurrentProject();
     const total=(state.claims||[]).reduce((t,x)=>t+(+x.amount||0),0);
@@ -2856,10 +2861,10 @@ function exportXLSX(){
   XLSX.utils.book_append_sheet(wb,ws8,'Quotes');
 
   // Sheet 9: Contacts
-  const contRows=[['Name','Role','Company','Phone','Email','VBA Licence','Notes']];
-  (state.contacts||[]).forEach(c=>contRows.push([c.name,c.role,c.company,c.phone,c.email,c.license,c.notes]));
+  const contRows=[['Name','Role','Company','Phone','Email','VBA Licence','ABN','Insurance Expiry','Rating','Notes']];
+  (state.contacts||[]).forEach(c=>contRows.push([c.name,c.role,c.company,c.phone,c.email,c.license,c.abn||'',c.insuranceExpiry||'',['','★','★★','★★★','★★★★','★★★★★'][+c.rating||0]||'',c.notes]));
   const ws9=XLSX.utils.aoa_to_sheet(contRows);
-  ws9['!cols']=[{wch:24},{wch:18},{wch:28},{wch:16},{wch:30},{wch:16},{wch:35}];
+  ws9['!cols']=[{wch:24},{wch:18},{wch:28},{wch:16},{wch:30},{wch:16},{wch:16},{wch:16},{wch:8},{wch:35}];
   XLSX.utils.book_append_sheet(wb,ws9,'Contacts');
 
   // Sheet 10: Site Diary
@@ -3033,7 +3038,7 @@ function exportReportCard(){
     <td>${tk.actualStart||'—'}</td><td>${tk.actualEnd||'—'}</td>
   </tr>`).join('');
   const diaryRows=(state.diary||[]).slice(-20).reverse().map(d=>`<tr>
-    <td>${d.date||'—'}</td><td>${e2(d.who)}</td><td>${e2(d.weather||'')}</td><td>${e2(d.notes)}</td>
+    <td>${d.date||'—'}</td><td>${e2(d.people||'')}</td><td>${e2(d.weather||'')}</td><td>${e2(d.notes)}</td>
   </tr>`).join('');
   const out=`<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><title>Project Report — ${e2(p.name)}</title>
