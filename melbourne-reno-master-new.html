@@ -29,7 +29,7 @@
     .chip-sm{padding:1px 6px;font-size:10px;}
     .pri-A{background:#fef3c7;color:#92400e;}.pri-A2{background:#fef9c3;color:#854d0e;}
     .pri-B{background:#dbeafe;color:#1e40af;}.pri-C{background:#f1f5f9;color:#475569;}
-    .mode-DIY{background:#dcfce7;color:#166534;}.mode-Trade{background:#e0e7ff;color:#3730a3;}.mode-Both{background:#fae8ff;color:#86198f;}
+    .mode-DIY{background:#dcfce7;color:#166534;}.mode-Trade{background:#e0e7ff;color:#3730a3;}.mode-Both{background:#fae8ff;color:#86198f;}.mode-Cash{background:#fef9c3;color:#713f12;}
     .pay-bar{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;}
     .pay-bar-fill{height:6px;background:#10b981;border-radius:3px;transition:width .2s;}
     .pay-bar-over{background:#ef4444;}
@@ -195,7 +195,7 @@
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
       <div><div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Target sale price</div><div id="se-target" class="mono text-lg font-semibold mt-0.5">—</div></div>
       <div><div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">− Mortgage payout</div><div id="se-mort" class="mono text-lg font-semibold mt-0.5 text-slate-700">—</div></div>
-      <div><div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">− Sale costs</div><div id="se-sale" class="mono text-lg font-semibold mt-0.5 text-slate-700">—</div></div>
+      <div><div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">− Sale costs</div><div id="se-sale" class="mono text-lg font-semibold mt-0.5 text-slate-700">—</div><div id="se-agent-hint" class="text-[10px] text-slate-400 mt-0.5 hidden"></div></div>
       <div><div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">− Reno total</div><div id="se-reno" class="mono text-lg font-semibold mt-0.5 text-slate-700">—</div></div>
     </div>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3 pt-3 border-t border-slate-100">
@@ -364,14 +364,19 @@
     <h2 class="text-lg font-bold">Line-item budget</h2>
     <div class="flex flex-wrap items-center gap-2">
       <div class="inline-flex rounded-lg overflow-hidden border border-slate-300 text-xs font-semibold">
-        <button data-scope="all"  class="b-scope px-2.5 py-1.5 bg-white">All</button>
-        <button data-scope="reno" class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Renovation</button>
-        <button data-scope="sale" class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Sale costs</button>
+        <button data-scope="all"     class="b-scope px-2.5 py-1.5 bg-white">All</button>
+        <button data-scope="reno"    class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Renovation</button>
+        <button data-scope="permit"  class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Permits</button>
+        <button data-scope="pest"    class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Pest</button>
+        <button data-scope="sale"    class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Sale costs</button>
       </div>
       <select id="b-filter-room"  class="rounded-lg border-slate-300 border px-2 py-1.5 text-sm bg-white"><option value="">All rooms</option></select>
       <select id="b-filter-trade" class="rounded-lg border-slate-300 border px-2 py-1.5 text-sm bg-white"><option value="">All trades</option></select>
-      <button id="b-add"           class="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg">+ Add line</button>
+      <button id="b-add"            class="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg">+ Add line</button>
+      <button id="b-add-permit"    class="bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Add a Permits & Council line item">+ Permit</button>
+      <button id="b-add-pest"      class="bg-lime-700 hover:bg-lime-800 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Add a Pest Control line item">+ Pest</button>
       <button id="b-add-sale"      class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg">+ Sale cost</button>
+      <button id="b-inject-council" class="bg-violet-100 hover:bg-violet-200 text-violet-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common VIC council & permit fees">🏛 Council Fees</button>
       <button id="b-inject-hidden" class="bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common hidden costs">+ Hidden costs</button>
       <button id="b-inject-dd"     class="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject due diligence, roof & outdoor presets">🏠 Due Diligence</button>
       <button id="b-seed"          class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg">Load sample</button>
@@ -381,12 +386,14 @@
     <div class="overflow-x-auto scrollbar-thin">
       <table class="w-full text-sm">
         <thead class="bg-slate-50 border-b border-slate-200"><tr class="text-left text-[11px] uppercase tracking-wider text-slate-500">
-          <th class="px-2 py-2.5 font-semibold">Pri</th><th class="px-2 py-2.5 font-semibold">Description</th><th class="px-2 py-2.5 font-semibold">Room</th><th class="px-2 py-2.5 font-semibold">Trade</th><th class="px-2 py-2.5 font-semibold">Mode</th><th class="px-2 py-2.5 font-semibold">M/L</th><th class="px-2 py-2.5 font-semibold text-right">Qty</th><th class="px-2 py-2.5 font-semibold">Unit</th><th class="px-2 py-2.5 font-semibold text-right">Unit $</th><th class="px-2 py-2.5 font-semibold text-center">GST</th><th class="px-2 py-2.5 font-semibold text-right">Total</th><th class="px-2 py-2.5 font-semibold">Paid</th><th class="px-2 py-2.5"></th>
+          <th class="px-2 py-2.5 font-semibold">Pri</th><th class="px-2 py-2.5 font-semibold">Description</th><th class="px-2 py-2.5 font-semibold">Room</th><th class="px-2 py-2.5 font-semibold">Trade</th><th class="px-2 py-2.5 font-semibold">Mode</th><th class="px-2 py-2.5 font-semibold" title="Materials (M) / Labour (L) / Both — used for depreciation schedules (Div40 Plant & Equipment vs Div43 Capital Works)">Mat/Lab</th><th class="px-2 py-2.5 font-semibold text-right">Qty</th><th class="px-2 py-2.5 font-semibold">Unit</th><th class="px-2 py-2.5 font-semibold text-right">Unit $</th><th class="px-2 py-2.5 font-semibold text-center">GST</th><th class="px-2 py-2.5 font-semibold text-right">Total</th><th class="px-2 py-2.5 font-semibold">Paid</th><th class="px-2 py-2.5"></th>
         </tr></thead>
         <tbody id="budget-tbody"></tbody>
         <tfoot class="bg-slate-50 border-t-2 border-slate-200 font-semibold">
-          <tr><td class="px-2 py-2.5" colspan="9">Renovation lines · totals</td><td></td><td class="px-2 py-2.5 text-right mono" id="b-sum-total">$0</td><td class="px-2 py-2.5 text-right mono" id="b-sum-paid">$0</td><td></td></tr>
-          <tr id="b-sale-foot" class="hidden"><td class="px-2 py-2.5 text-amber-700" colspan="9">Sale costs · totals</td><td></td><td class="px-2 py-2.5 text-right mono text-amber-700" id="b-sum-saletotal">$0</td><td class="px-2 py-2.5 text-right mono text-amber-700" id="b-sum-salepaid">$0</td><td></td></tr>
+          <tr><td class="px-2 py-2.5" colspan="9">Renovation · subtotal</td><td></td><td class="px-2 py-2.5 text-right mono" id="b-sum-total">$0</td><td class="px-2 py-2.5 text-right mono" id="b-sum-paid">$0</td><td></td></tr>
+          <tr id="b-permit-foot" class="hidden"><td class="px-2 py-2.5 text-violet-700" colspan="9">Permits &amp; Council · subtotal</td><td></td><td class="px-2 py-2.5 text-right mono text-violet-700" id="b-sum-permit">$0</td><td class="px-2 py-2.5"></td><td></td></tr>
+          <tr id="b-pest-foot" class="hidden"><td class="px-2 py-2.5 text-lime-700" colspan="9">Pest Control · subtotal</td><td></td><td class="px-2 py-2.5 text-right mono text-lime-700" id="b-sum-pest">$0</td><td class="px-2 py-2.5"></td><td></td></tr>
+          <tr id="b-sale-foot" class="hidden"><td class="px-2 py-2.5 text-amber-700" colspan="9">Sale costs · subtotal</td><td></td><td class="px-2 py-2.5 text-right mono text-amber-700" id="b-sum-saletotal">$0</td><td class="px-2 py-2.5 text-right mono text-amber-700" id="b-sum-salepaid">$0</td><td></td></tr>
         </tfoot>
       </table>
     </div>
@@ -629,12 +636,12 @@
       </label>
       <label class="block">
         <span class="text-xs font-semibold text-slate-600">Agent commission estimate (%)</span>
-        <div class="text-[11px] text-slate-400 mb-1">Used in sale cost projections on Dashboard</div>
+        <div class="text-[11px] text-slate-400 mb-1">Shows an estimated agent cost on the Dashboard Sale Economics section. Add actual amounts to Budget → Sale Cost for precise tracking.</div>
         <input id="st-agent-pct" type="number" min="0" max="10" step="0.05" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm mono" placeholder="2"/>
       </label>
       <label class="block">
         <span class="text-xs font-semibold text-slate-600">Council permit &amp; levy estimate ($)</span>
-        <div class="text-[11px] text-slate-400 mb-1">Typical range $2,000–$8,000 depending on works value &amp; council</div>
+        <div class="text-[11px] text-slate-400 mb-1">Reference planning figure — shown as a Dashboard reminder. Add actual permit invoices to Budget → Permits &amp; Council for tracking.</div>
         <input id="st-permit" type="number" min="0" step="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm mono" placeholder="3500"/>
       </label>
       <label class="block">
@@ -666,11 +673,13 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
       <label class="block">
         <span class="text-xs font-semibold text-slate-600">GitHub Personal Access Token</span>
+        <div class="text-[11px] text-amber-600 mb-1">⚠ Token is saved when you click Push or Pull below — not by "Save settings" above.</div>
         <input id="st-gist-token" type="password" class="mt-1 w-full rounded-lg border-slate-300 border px-3 py-2 text-sm mono" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"/>
       </label>
       <label class="block">
         <span class="text-xs font-semibold text-slate-600">Gist ID <span class="font-normal text-slate-400">(auto-filled after first push)</span></span>
-        <input id="st-gist-id" type="text" class="mt-1 w-full rounded-lg border-slate-300 border px-3 py-2 text-sm mono" placeholder="Leave blank on first use"/>
+        <div class="text-[11px] text-slate-400 mb-1">On a new device: enter the Gist ID from your main device, then click Pull.</div>
+        <input id="st-gist-id" type="text" class="mt-1 w-full rounded-lg border-slate-300 border px-3 py-2 text-sm mono" placeholder="Leave blank on first use — auto-created"/>
       </label>
     </div>
     <div class="flex flex-wrap gap-2 mb-2">
@@ -877,7 +886,7 @@ const RISK_SAMPLES=[
 ];
 const HIA_MILESTONES=['Base / Slab','Frame','Lock-up','Fixing / Fit-out','Practical Completion','Other'];
 const DEP_OPTIONS=['','Div43 - Capital Works (2.5%/yr)','Div40 - Plant & Equipment'];
-const MODES=['Trade','DIY','Both'];
+const MODES=['Trade','DIY','Both','Cash'];
 const PRIORITIES=['A','B','C'];
 const CLAIM_STATUSES=['Pending','Paid','Disputed'];
 const INSP_RESULTS=['','Pass','Fail','Pending'];
@@ -906,7 +915,7 @@ function defaultData(){
       propertyType:'House',investmentStrategy:'Renovate & Hold',
       currentWeeklyRent:0,targetWeeklyRent:0,dlpStartDate:'',dlpMonths:12,area:0,
       rooms:['Kitchen','Bathroom','Laundry','Master Bedroom','Bedroom','Living/Dining','Exterior','Garage'],
-      trades:['Demolition','Carpenter','Electrician','Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector'],
+      trades:['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Building Surveyor'],
     },
     contacts:[],budget:[],schedule:[],punch:[],
     inspections:[],compliance:[],ofi:[],risks:[],quotes:[],claims:[],diary:[],
@@ -1046,6 +1055,10 @@ function migrate(d){
   }
   // Migrate project area and settings
   if(!d.project.area)d.project.area=0;
+  // Migrate trades — add any new standard trades not yet in the project list
+  const coreTrades=['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Building Surveyor'];
+  if(!Array.isArray(d.project.trades))d.project.trades=coreTrades;
+  else coreTrades.forEach(t=>{if(!d.project.trades.includes(t))d.project.trades.push(t);});
   if(!d.settings){d.settings={contingencyPct:d.project.contingencyPct||12,agentCommissionPct:2,councilPermitEst:3500,stampDutyOverridePct:0,costPerSqmTarget:1500};}
   else{
     if(d.settings.contingencyPct===undefined)d.settings.contingencyPct=12;
@@ -1261,6 +1274,7 @@ function wireContacts(){
 }
 
 // ==================== BUDGET HELPERS ====================
+const RENO_CATS=['Renovation','Permits & Council','Pest Control']; // all non-sale categories
 function budgetTotals(){
   const reno=state.budget.filter(b=>b.cat!=='Sale Cost');
   const sale=state.budget.filter(b=>b.cat==='Sale Cost');
@@ -1273,7 +1287,10 @@ function budgetTotals(){
   const gstTotal=sum(reno,true)*0.1+sum(sale,true)*0.1;
   const cont=renoTotal*(state.project.contingencyPct||0)/100;
   const grand=renoTotal+gstTotal+cont;
-  return{renoTotal,renoPaid,saleTotal,salePaid,gstTotal,cont,grand,itemCount:reno.length};
+  // Per-category subtotals
+  const permitTotal=sum(state.budget.filter(b=>b.cat==='Permits & Council'));
+  const pestTotal=sum(state.budget.filter(b=>b.cat==='Pest Control'));
+  return{renoTotal,renoPaid,saleTotal,salePaid,gstTotal,cont,grand,itemCount:reno.length,permitTotal,pestTotal};
 }
 function refreshBudgetFilters(){
   const rooms=state.project.rooms||[];
@@ -1293,8 +1310,10 @@ function renderBudget(){
   const roomF=$('b-filter-room')?.value||'';
   const tradeF=$('b-filter-trade')?.value||'';
   let items=state.budget.filter(b=>{
-    if(scopeFilter==='reno'&&b.cat==='Sale Cost')return false;
+    if(scopeFilter==='reno'&&b.cat!=='Renovation')return false;
     if(scopeFilter==='sale'&&b.cat!=='Sale Cost')return false;
+    if(scopeFilter==='permit'&&b.cat!=='Permits & Council')return false;
+    if(scopeFilter==='pest'&&b.cat!=='Pest Control')return false;
     if(roomF&&b.room!==roomF)return false;
     if(tradeF&&b.trade!==tradeF)return false;
     return true;
@@ -1332,8 +1351,8 @@ function renderBudget(){
         </select>
       </td>
       <td class="px-2 py-1.5">
-        <select data-f="mlType" class="text-[11px] rounded px-1 py-0.5 border border-slate-200 bg-white" title="Materials or Labour">
-          <option value="">—</option><option${b.mlType==='M'?' selected':''}>M</option><option${b.mlType==='L'?' selected':''}>L</option>
+        <select data-f="mlType" class="text-[11px] rounded px-1 py-0.5 border border-slate-200 bg-white" title="M = Materials only · L = Labour only · Both = materials + labour combined · Used for tax depreciation schedules">
+          <option value="">—</option><option${b.mlType==='M'?' selected':''}>M</option><option${b.mlType==='L'?' selected':''}>L</option><option${b.mlType==='Both'?' selected':''}>Both</option>
         </select>
       </td>
       <td class="px-2 py-1.5 text-right"><input data-f="qty" type="number" min="0" step="0.1" value="${+b.qty||1}" class="w-14 text-right text-sm border border-slate-200 rounded px-1 py-0.5 mono bg-white"/></td>
@@ -1375,7 +1394,12 @@ function renderBudget(){
           <label class="block"><span class="text-xs font-semibold text-slate-500">Invoice date</span>
             <input data-f="invoiceDate" type="date" value="${esc(b.invoiceDate||'')}" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm bg-white"/>
           </label>
-          <label class="block"><span class="text-xs font-semibold text-slate-500">Notes</span>
+          <label class="block"><span class="text-xs font-semibold text-slate-500">Category</span>
+            <select data-f="cat" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm bg-white">
+              ${['Renovation','Permits & Council','Pest Control','Sale Cost'].map(c=>`<option${c===b.cat?' selected':''}>${c}</option>`).join('')}
+            </select>
+          </label>
+          <label class="block sm:col-span-2"><span class="text-xs font-semibold text-slate-500">Notes</span>
             <input data-f="notes" value="${esc(b.notes)}" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm bg-white" placeholder="Notes"/>
           </label>
         </div>
@@ -1387,12 +1411,17 @@ function renderBudget(){
   // Footer totals
   const t=budgetTotals();
   const hasSale=state.budget.some(b=>b.cat==='Sale Cost');
+  const hasPermit=state.budget.some(b=>b.cat==='Permits & Council');
+  const hasPest=state.budget.some(b=>b.cat==='Pest Control');
   $('b-sum-total').textContent=fmtMoney(t.renoTotal);
   $('b-sum-paid').textContent=fmtMoney(t.renoPaid);
+  if($('b-sum-permit'))$('b-sum-permit').textContent=fmtMoney(t.permitTotal);
+  if($('b-sum-pest'))$('b-sum-pest').textContent=fmtMoney(t.pestTotal);
   $('b-sum-saletotal').textContent=fmtMoney(t.saleTotal);
   $('b-sum-salepaid').textContent=fmtMoney(t.salePaid);
-  const saleRow=$('b-sale-foot');
-  if(saleRow)saleRow.classList.toggle('hidden',!hasSale);
+  const saleRow=$('b-sale-foot');if(saleRow)saleRow.classList.toggle('hidden',!hasSale);
+  const permitRow=$('b-permit-foot');if(permitRow)permitRow.classList.toggle('hidden',!hasPermit);
+  const pestRow=$('b-pest-foot');if(pestRow)pestRow.classList.toggle('hidden',!hasPest);
 }
 
 function wireBudget(){
@@ -1424,7 +1453,41 @@ function wireBudget(){
   }
 
   $('b-add').addEventListener('click',()=>addBudgetLine('Renovation'));
+  $('b-add-permit').addEventListener('click',()=>addBudgetLine('Permits & Council'));
+  $('b-add-pest').addEventListener('click',()=>addBudgetLine('Pest Control'));
   $('b-add-sale').addEventListener('click',()=>addBudgetLine('Sale Cost'));
+
+  // ── Council / Permit presets ──
+  const COUNCIL_PRESETS=[
+    {priority:'A',description:'Building Permit — Structural / Alterations',trade:'Building Surveyor',estimated:2200,gst:true,
+     note:'Private building surveyor fee for permit application. Covers inspection fees for frame, lock-up, final. VIC Building Act 1993 s16. Allow 4–8 weeks.'},
+    {priority:'A',description:'Planning Permit — Council Application Fee',trade:'',estimated:1500,gst:false,
+     note:'Council planning permit application fee — varies by council and scope. Not GST exempt. Check council website for fee schedule. Allow 60–90 days for approval.'},
+    {priority:'B',description:'Permit Levy (Building Act) — Statutory Fee',trade:'',estimated:800,gst:false,
+     note:'VIC government levy on all building permits. Based on project cost (approx 0.128% of works value). Paid to VBA via building surveyor.'},
+    {priority:'B',description:'Soil Report / Geotechnical Investigation',trade:'Inspector',estimated:1200,gst:true,
+     note:'Required for new footings, retaining walls, re-stumping. Engineer uses Class A–M report for footing design. Typical suburban block $900–$1,800.'},
+    {priority:'B',description:'Structural Engineering — Drawings & Certification',trade:'Inspector',estimated:2800,gst:true,
+     note:'Structural engineer drawings required for building permit on structural works: beams, columns, posts, retaining walls >900mm. Allow 2–4 weeks from engagement.'},
+    {priority:'B',description:'Owner-Builder Permit (if applicable)',trade:'',estimated:150,gst:false,
+     note:'VBA owner-builder permit required if doing works valued over $16,000 and acting as own builder. Apply via vba.vic.gov.au. Exam required.'},
+    {priority:'C',description:'Council Crossover / Driveway Permit',trade:'',estimated:450,gst:false,
+     note:'Council approval required to alter or create vehicle crossing (crossover) from road to property. Separate to building permit. Check local council.'},
+    {priority:'C',description:'Stormwater / Drainage Connection Approval',trade:'',estimated:600,gst:false,
+     note:'Melbourne Water or council approval for new stormwater connection or alteration to existing. Required before waterproofing or drainage works.'},
+  ];
+  $('b-inject-council').addEventListener('click',()=>{
+    if(!confirm(`Add ${COUNCIL_PRESETS.length} common VIC Council & Permit fee lines?\n\nThese will be added as "Permits & Council" category items. You can delete or adjust any you don't need.`))return;
+    COUNCIL_PRESETS.forEach(d=>{
+      state.budget.push({
+        id:uid(),priority:d.priority,description:d.name||d.description,room:'',trade:d.trade||'',
+        mode:'Trade',mlType:'',qty:1,unit:'lot',unitCost:d.estimated,originalCost:d.estimated,
+        taxLabel:'',hia:'',gst:d.gst,paidAmt:0,cat:'Permits & Council',notes:d.note,invoiceDate:'',
+      });
+    });
+    saveCurrentProject();renderBudget();
+    showToast(`🏛 ${COUNCIL_PRESETS.length} council/permit lines added`,'bg-violet-600');
+  });
 
   $('b-inject-dd').addEventListener('click',()=>{
     const cats=['Due Diligence','Roof','Outdoor'];
@@ -1505,6 +1568,8 @@ function wireBudget(){
     const t=budgetTotals();
     $('b-sum-total').textContent=fmtMoney(t.renoTotal);
     $('b-sum-paid').textContent=fmtMoney(t.renoPaid);
+    if($('b-sum-permit'))$('b-sum-permit').textContent=fmtMoney(t.permitTotal);
+    if($('b-sum-pest'))$('b-sum-pest').textContent=fmtMoney(t.pestTotal);
     $('b-sum-saletotal').textContent=fmtMoney(t.saleTotal);
     $('b-sum-salepaid').textContent=fmtMoney(t.salePaid);
   }
@@ -2413,6 +2478,19 @@ function computeWarnings(){
   const highOpen=(state.punch||[]).filter(p=>p.severity==='High'&&p.status!=='Fixed');
   if(highOpen.length)warnings.push(`🔴 ${highOpen.length} high-severity defect${highOpen.length>1?'s':''} still open in punch list`);
 
+  // 8. Council permit budget reminder
+  const councilEst=+(state.settings?.councilPermitEst||0);
+  const hasPermitBudget=state.budget.some(b=>b.cat==='Permits & Council');
+  if(councilEst>0&&!hasPermitBudget&&state.budget.length>0)
+    warnings.push(`🏛 No Permits & Council costs in budget yet — estimated ${fmtMoney(councilEst)} based on Settings. Add via Budget → 🏛 Council Fees.`);
+
+  // 9. Agent commission reminder
+  const agentPct2=+(state.settings?.agentCommissionPct||0);
+  const hasAgentBudget=state.budget.some(b=>b.cat==='Sale Cost'&&/agent|commission/i.test(b.description||''));
+  const saleP=+state.project.targetSalePrice||0;
+  if(agentPct2>0&&!hasAgentBudget&&saleP>0)
+    warnings.push(`💰 Agent commission not in Sale Costs budget — at ${agentPct2}% that's approx ${fmtMoney(Math.round(saleP*agentPct2/100))}. Add via Budget → + Sale cost.`);
+
   return warnings;
 }
 
@@ -2543,6 +2621,17 @@ function renderDashboard(){
     $('se-mort').textContent='− '+fmtMoney(p.mortgageBalance||0);
     $('se-sale').textContent='− '+fmtMoney(saleCosts);
     $('se-reno').textContent='− '+fmtMoney(t.grand);
+    // Agent commission hint — show if agentCommissionPct set and no agent line already in budget
+    const agentPct=+(state.settings?.agentCommissionPct||0);
+    const agentHintEl=$('se-agent-hint');
+    if(agentHintEl){
+      const hasAgentLine=state.budget.some(b=>b.cat==='Sale Cost'&&/agent|commission/i.test(b.description||''));
+      if(agentPct>0&&!hasAgentLine){
+        const est=Math.round(salePrice*agentPct/100);
+        agentHintEl.textContent=`Est. agent @ ${agentPct}%: ${fmtMoney(est)} — add to Budget → Sale Cost`;
+        agentHintEl.classList.remove('hidden');
+      } else { agentHintEl.classList.add('hidden'); }
+    }
     $('se-net').textContent=fmtMoney(net);
     $('se-net').className=`mono text-lg font-bold mt-0.5 ${net>=0?'text-emerald-700':'text-red-600'}`;
     // VIC Stamp Duty estimate (on purchase price)
@@ -2768,121 +2857,379 @@ function exportXLSX(){
   const wb=XLSX.utils.book_new();
   const p=state.project;
   const t=budgetTotals();
+  const today=isoToday();
+  const fm=n=>(+n||0)===0?0:Math.round(+n||0);
+  const stars={'A':'★★★','B':'★★','C':'★'};
 
-  // Sheet 1: Summary
+  // ──────────────────────────────────────────────
+  // Sheet 1 · 📊 Project Overview
+  // ──────────────────────────────────────────────
+  const salePrice=+p.targetSalePrice||0;
+  const saleCosts=state.budget.filter(b=>b.cat==='Sale Cost').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);
+  const estimatedNet=salePrice-(+p.mortgageBalance||0)-saleCosts-t.grand;
+  const tasks=state.schedule||[];
+  const doneTasks=tasks.filter(tk=>tk.done).length;
+  const latestEnd=tasks.filter(tk=>tk.plannedEnd).reduce((a,b)=>b.plannedEnd>a?b.plannedEnd:a,'');
+  const overdueTasks=tasks.filter(tk=>!tk.done&&tk.plannedEnd&&tk.plannedEnd<today);
+  const openDefects=(state.punch||[]).filter(d=>d.status!=='Fixed');
+  const highRisks=(state.risks||[]).filter(r=>r.impact==='High'&&r.status==='Open');
+
   const s1=[
-    ['Melbourne Reno Master — Project Summary','','',''],
-    ['Generated',new Date().toLocaleString('en-AU'),'',''],
-    ['','','',''],
-    ['PROJECT DETAILS','','VALUE',''],
-    ['Project name','',p.name,''],
-    ['Address','',p.address,''],
-    ['Start date','',p.startDate,''],
-    ['Property type','',p.propertyType,''],
-    ['Investment strategy','',p.investmentStrategy,''],
-    ['Year built','',p.yearBuilt,''],
-    ['Council','',p.council,''],
-    ['','','',''],
-    ['BUDGET SUMMARY','','',''],
-    ['Reno subtotal (ex GST)','',t.renoTotal,''],
-    ['GST (10%)','',t.gstTotal,''],
-    ['Contingency ('+p.contingencyPct+'%)','',t.cont,''],
-    ['Grand total','',t.grand,''],
-    ['Amount paid','',t.renoPaid,''],
-    ['Sale costs','',t.saleTotal,''],
-    ['','','',''],
-    ['FINANCE','','',''],
-    ['Purchase price','',p.purchasePrice||0,''],
-    ['Target sale price','',p.targetSalePrice||0,''],
-    ['Mortgage payout','',p.mortgageBalance||0,''],
-    ['','','',''],
-    ['DLP START','',p.dlpStartDate||'—',''],
-    ['DLP EXPIRY','',p.dlpStartDate?addMonths(p.dlpStartDate,p.dlpMonths||12):'—',''],
+    [p.name||'Melbourne Renovation Project','','','','',''],
+    [p.address||'','','','','',''],
+    ['Generated: '+new Date().toLocaleString('en-AU'),'','','','',''],
+    ['','','','','',''],
+    // ── Project Details ──
+    ['PROJECT DETAILS','','','PROPERTY FINANCIALS','',''],
+    ['Property Type',p.propertyType||'—','','Purchase Price'   ,fm(p.purchasePrice),  ''],
+    ['Investment Strategy',p.investmentStrategy||'—','','Target Sale Price',fm(salePrice),''],
+    ['Year Built',p.yearBuilt||'—','','Mortgage Payout'   ,fm(p.mortgageBalance),''],
+    ['Council',p.council||'—','','','',''],
+    ['Floor Area (m²)',p.area>0?p.area+'m²':'—','','','',''],
+    ['Start Date',p.startDate||'—','','','',''],
+    ['DLP Start',p.dlpStartDate||'—','','DLP End',p.dlpStartDate?addMonths(p.dlpStartDate,p.dlpMonths||12):'—',''],
+    ['','','','','',''],
+    // ── Budget Summary ──
+    ['BUDGET SUMMARY','','','','',''],
+    ['CATEGORY','TOTAL (ex GST)','PAID','REMAINING','% PAID',''],
+    ['Renovation',fm(state.budget.filter(b=>b.cat==='Renovation').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0)),
+      fm(state.budget.filter(b=>b.cat==='Renovation').reduce((s,b)=>s+(+b.paidAmt||0),0)),'','',''],
+    ['Permits & Council',fm(t.permitTotal||0),0,'','',''],
+    ['Pest Control',fm(t.pestTotal||0),0,'','',''],
+    ['Sale Costs',fm(t.saleTotal),fm(t.salePaid),'','',''],
+    ['GST (10% on applicable items)',fm(t.gstTotal),'','','',''],
+    ['Contingency ('+( p.contingencyPct||0)+'%)',fm(t.cont),'','','',''],
+    ['GRAND TOTAL (incl. GST + contingency)',fm(t.grand),fm(t.renoPaid),fm(t.grand-t.renoPaid),
+      t.grand>0?Math.round(t.renoPaid/t.grand*100)+'%':'0%',''],
+    ['','','','','',''],
+    // ── Sale Economics ──
+    ['SALE ECONOMICS (estimates only — not financial advice)','','','','',''],
+    ['Target sale price','',fm(salePrice),'','',''],
+    ['Less: Mortgage payout','','−'+fm(p.mortgageBalance||0),'','',''],
+    ['Less: Sale & marketing costs','','−'+fm(saleCosts),'','',''],
+    ['Less: Renovation budget (incl. GST + contingency)','','−'+fm(t.grand),'','',''],
+    ['Estimated net proceeds','',fm(estimatedNet),'','',''],
+    ['','','','','',''],
+    // ── VIC Stamp Duty & CGT ──
+    (()=>{
+      const pp=+p.purchasePrice||0;
+      const sdOverride=+(state.settings?.stampDutyOverridePct||0);
+      let sd=0;
+      if(pp>0){if(sdOverride>0){sd=pp*(sdOverride/100);}else{
+        if(pp<=25000)sd=pp*0.014;else if(pp<=130000)sd=350+(pp-25000)*0.024;
+        else if(pp<=960000)sd=2870+(pp-130000)*0.06;else sd=pp*0.055;
+      }}
+      const costBase=(pp>0?pp:0)+sd+t.grand;
+      const gain=salePrice-costBase;
+      const cgt=gain>0?Math.round(gain*0.5*0.37):0;
+      return ['STAMP DUTY & CGT ESTIMATES (non-PPR)','','','','',''];
+    })(),
+    (()=>{
+      const pp=+p.purchasePrice||0;const sdOverride=+(state.settings?.stampDutyOverridePct||0);
+      let sd=0;if(pp>0){if(sdOverride>0){sd=pp*(sdOverride/100);}else{if(pp<=25000)sd=pp*0.014;else if(pp<=130000)sd=350+(pp-25000)*0.024;else if(pp<=960000)sd=2870+(pp-130000)*0.06;else sd=pp*0.055;}}
+      return ['VIC Stamp Duty (est.)',fm(Math.round(sd)),'','Source: VIC SRO progressive tiers (non-PPR 2024-25)','',''];
+    })(),
+    (()=>{
+      const pp=+p.purchasePrice||0;const sdOverride=+(state.settings?.stampDutyOverridePct||0);
+      let sd=0;if(pp>0){if(sdOverride>0){sd=pp*(sdOverride/100);}else{if(pp<=25000)sd=pp*0.014;else if(pp<=130000)sd=350+(pp-25000)*0.024;else if(pp<=960000)sd=2870+(pp-130000)*0.06;else sd=pp*0.055;}}
+      const costBase=(pp>0?pp:0)+sd+t.grand;
+      const gain=salePrice>0?salePrice-costBase:0;
+      const cgt=gain>0?Math.round(gain*0.5*0.37):0;
+      return ['CGT Estimate (50% discount, 37% marginal)',gain>0?fm(cgt):'n/a (no gain)','','Assumes >12 months hold · Verify with accountant','',''];
+    })(),
+    ['GST Claimable (BAS)',fm(t.gstTotal),'','10% on GST-applicable reno items','',''],
+    ['','','','','',''],
+    // ── Progress Summary ──
+    ['PROJECT PROGRESS','','','','',''],
+    ['Schedule tasks total',tasks.length,'','Done',doneTasks,''],
+    ['Completion %',tasks.length>0?Math.round(doneTasks/tasks.length*100)+'%':'0%','','Overdue tasks',overdueTasks.length,''],
+    ['Planned completion',latestEnd||'—','','Open defects (punch list)',openDefects.length,''],
+    ['High-priority open risks',highRisks.length,'','','',''],
+    ['','','','','',''],
+    // ── Rental Yield ──
+    ['RENTAL YIELD ANALYSIS','','','','',''],
+    ['Current weekly rent',fm(p.currentWeeklyRent||0),'','Current annual',fm((+p.currentWeeklyRent||0)*52),''],
+    ['Target weekly rent (post-reno)',fm(p.targetWeeklyRent||0),'','Target annual',fm((+p.targetWeeklyRent||0)*52),''],
+    ['Annual rent uplift',fm(((+p.targetWeeklyRent||0)-(+p.currentWeeklyRent||0))*52),'','','',''],
+    ['Gross yield (current)',salePrice>0&&p.currentWeeklyRent>0?(+p.currentWeeklyRent*52/salePrice*100).toFixed(2)+'%':'—','',
+     'Gross yield (target)',salePrice>0&&p.targetWeeklyRent>0?(+p.targetWeeklyRent*52/salePrice*100).toFixed(2)+'%':'—',''],
   ];
   const ws1=XLSX.utils.aoa_to_sheet(s1);
-  ws1['!cols']=[{wch:30},{wch:5},{wch:20},{wch:5}];
-  XLSX.utils.book_append_sheet(wb,ws1,'Summary');
+  ws1['!cols']=[{wch:42},{wch:22},{wch:18},{wch:36},{wch:18},{wch:5}];
+  XLSX.utils.book_append_sheet(wb,ws1,'📊 Project Overview');
 
-  // Sheet 2: Budget
-  const budgetRows=[['Priority','Description','Room','Trade','Mode','M/L','Qty','Unit','Unit Cost','GST','Total','Paid','Original Quote','Tax Label','HIA Milestone','Notes','Category']];
-  state.budget.forEach(b=>budgetRows.push([
-    b.priority,b.description,b.room,b.trade,b.mode,b.mlType,
-    +b.qty||1,b.unit||'lot',+b.unitCost||0,b.gst?'Yes':'No',
-    (b.qty||1)*(b.unitCost||0),+b.paidAmt||0,
-    +b.originalCost||0,b.taxLabel||'',b.hia||'',b.notes||'',b.cat||'Renovation'
-  ]));
-  const ws2=XLSX.utils.aoa_to_sheet(budgetRows);
-  ws2['!cols']=[{wch:6},{wch:35},{wch:16},{wch:16},{wch:8},{wch:5},{wch:6},{wch:8},{wch:12},{wch:5},{wch:12},{wch:12},{wch:14},{wch:28},{wch:22},{wch:30},{wch:14}];
-  XLSX.utils.book_append_sheet(wb,ws2,'Budget');
+  // ──────────────────────────────────────────────
+  // Sheet 2 · 📋 Work Items & Budget
+  // ──────────────────────────────────────────────
+  const CATS_ORDER=['Renovation','Permits & Council','Pest Control','Sale Cost'];
+  const CAT_EMOJI={'Renovation':'🔨','Permits & Council':'🏛','Pest Control':'🐛','Sale Cost':'💰'};
+  const budHdr=['#','Category','Description','Room / Area','Trade','Mode','Priority',
+    'Orig. Est ($)','Current Quote ($)','Qty','Unit','Unit $','GST',
+    'Total ($)','Paid ($)','Remaining ($)','Invoice Date','HIA Milestone','Mat/Lab','Tax Category','Notes'];
+  const budRows=[
+    [p.name+' — Work Items & Budget','','','','','','','','','','','','','','','','','','','',''],
+    ['Generated: '+today,'','','','','','','','','','','','','','','','','','','',''],
+    ['','','','','','','','','','','','','','','','','','','','',''],
+    budHdr,
+  ];
+  let lineNo=0;
+  let grandBudget=0, grandPaid=0, grandTotal=0;
+  CATS_ORDER.forEach(cat=>{
+    const items=state.budget.filter(b=>b.cat===cat);
+    if(!items.length)return;
+    // Category header row
+    budRows.push([CAT_EMOJI[cat]+' '+cat.toUpperCase(),'','','','','','','','','','','','','','','','','','','','']);
+    let catTotal=0,catPaid=0,catBudget=0;
+    items.forEach(b=>{
+      lineNo++;
+      const total=(+b.qty||1)*(+b.unitCost||0);
+      const remaining=Math.max(0,total-(+b.paidAmt||0));
+      catTotal+=total; catPaid+=(+b.paidAmt||0); catBudget+=(+b.originalCost||0)*(+b.qty||1);
+      budRows.push([
+        lineNo, cat, b.description||'', b.room||'', b.trade||'', b.mode||'', stars[b.priority]||b.priority||'',
+        fm((+b.originalCost||0)*(+b.qty||1)), fm((+b.unitCost||0)*(+b.qty||1)),
+        +b.qty||1, b.unit||'lot', fm(+b.unitCost||0), b.gst?'Yes':'No',
+        fm(total), fm(+b.paidAmt||0), fm(remaining),
+        b.invoiceDate||'', b.hia||'', b.mlType||'', b.taxLabel||'', b.notes||''
+      ]);
+    });
+    // Category subtotal
+    budRows.push(['','','','','','','['+cat+' SUBTOTAL]','',fm(catBudget),'','','',
+      '',fm(catTotal),fm(catPaid),fm(Math.max(0,catTotal-catPaid)),'','','','','']);
+    budRows.push(['','','','','','','','','','','','','','','','','','','','','']);
+    grandBudget+=catBudget; grandPaid+=catPaid; grandTotal+=catTotal;
+  });
+  budRows.push(['','','','','','','★ GRAND TOTAL (ex GST + contingency)','',fm(grandBudget),'','','','',
+    fm(grandTotal),fm(grandPaid),fm(Math.max(0,grandTotal-grandPaid)),'','','','','']);
+  budRows.push(['','','','','','','★ GST (10% on applicable items)','','','','','','',fm(t.gstTotal),'','','','','','','']);
+  budRows.push(['','','','','','','★ Contingency ('+( p.contingencyPct||0)+'%)','','','','','','',fm(t.cont),'','','','','','','']);
+  budRows.push(['','','','','','','★ GRAND TOTAL (incl. GST + contingency)','','','','','','',fm(t.grand),fm(t.renoPaid),fm(Math.max(0,t.grand-t.renoPaid)),'','','','','']);
+  const ws2=XLSX.utils.aoa_to_sheet(budRows);
+  ws2['!cols']=[{wch:4},{wch:16},{wch:38},{wch:18},{wch:18},{wch:8},{wch:8},
+    {wch:14},{wch:16},{wch:5},{wch:7},{wch:10},{wch:5},
+    {wch:14},{wch:12},{wch:14},{wch:14},{wch:22},{wch:8},{wch:28},{wch:35}];
+  XLSX.utils.book_append_sheet(wb,ws2,'📋 Work Items & Budget');
 
-  // Sheet 3: Schedule
-  const schedRows=[['Task','Trade','Room','Mode','Priority','Planned Start','Planned End','Actual Start','Actual End','Done','Depends On','Notes']];
-  state.schedule.forEach(s=>schedRows.push([
-    s.task,s.trade,s.room,s.mode,s.priority,
-    s.plannedStart,s.plannedEnd,s.actualStart||'',s.actualEnd||'',
-    s.done?'Yes':'No',s.deps||'',s.taskNotes||''
-  ]));
-  const ws3=XLSX.utils.aoa_to_sheet(schedRows);
-  ws3['!cols']=[{wch:35},{wch:16},{wch:16},{wch:8},{wch:8},{wch:14},{wch:14},{wch:14},{wch:14},{wch:6},{wch:30},{wch:40}];
-  XLSX.utils.book_append_sheet(wb,ws3,'Schedule');
+  // ──────────────────────────────────────────────
+  // Sheet 3 · 📞 Contacts & Suppliers
+  // ──────────────────────────────────────────────
+  const contHdr=['Role / Trade','Name','Company','Phone','Email','VBA Licence #','ABN','Insurance Expiry','Rating','Notes'];
+  const contRows=[
+    [p.name+' — Contacts & Suppliers','','','','','','','','',''],
+    ['','','','','','','','','',''],
+    contHdr,
+  ];
+  if(state.contacts&&state.contacts.length){
+    state.contacts.forEach(c=>{
+      const today2=isoToday();
+      const dLeft=c.insuranceExpiry?daysBetween(today2,c.insuranceExpiry):-1;
+      const insStatus=dLeft<0&&c.insuranceExpiry?'EXPIRED':dLeft>=0&&dLeft<=30?'Expiring in '+dLeft+'d':'';
+      contRows.push([c.role||'',c.name||'',c.company||'',c.phone||'',c.email||'',
+        c.license||'',c.abn||'',c.insuranceExpiry||'',
+        ['','★','★★','★★★','★★★★','★★★★★'][+c.rating||0]||'',
+        (c.notes||'')+(insStatus?' ⚠ '+insStatus:'')]);
+    });
+  } else {
+    contRows.push(['No contacts added yet','','','','','','','','','']);
+  }
+  const ws3=XLSX.utils.aoa_to_sheet(contRows);
+  ws3['!cols']=[{wch:20},{wch:22},{wch:26},{wch:16},{wch:30},{wch:18},{wch:16},{wch:16},{wch:8},{wch:40}];
+  XLSX.utils.book_append_sheet(wb,ws3,'📞 Contacts & Suppliers');
 
-  // Sheet 4: Inspections
-  const inspRows=[['Stage','Description','Mandatory','Planned Date','Actual Date','Inspector','Result','Notes']];
-  (state.inspections||[]).forEach(ins=>inspRows.push([ins.stage,ins.description,ins.mandatory?'Yes':'No',ins.plannedDate||'',ins.actualDate||'',ins.inspector||'',ins.result||'',ins.notes||'']));
-  const ws4=XLSX.utils.aoa_to_sheet(inspRows);
-  XLSX.utils.book_append_sheet(wb,ws4,'Inspections');
+  // ──────────────────────────────────────────────
+  // Sheet 4 · 📅 Schedule
+  // ──────────────────────────────────────────────
+  const schHdr=['#','Task','Trade','Room','Mode','Priority','Planned Start','Planned End','Duration (d)',
+    'Actual Start','Actual End','Done','Depends On','Status','Notes'];
+  const schRows=[
+    [p.name+' — Construction Schedule','','','','','','','','','','','','','',''],
+    ['','','','','','','','','','','','','','',''],
+    schHdr,
+  ];
+  const today3=isoToday();
+  state.schedule.forEach((s,i)=>{
+    const dur=s.plannedStart&&s.plannedEnd?daysBetween(s.plannedStart,s.plannedEnd):0;
+    const status=s.done?'Done':!s.done&&s.plannedEnd&&s.plannedEnd<today3?'Overdue':
+      !s.done&&s.plannedStart&&s.plannedStart<=today3&&(!s.plannedEnd||s.plannedEnd>=today3)?'In Progress':'Scheduled';
+    schRows.push([i+1,s.task||'',s.trade||'',s.room||'',s.mode||'',stars[s.priority]||s.priority||'',
+      s.plannedStart||'',s.plannedEnd||'',dur||'',
+      s.actualStart||'',s.actualEnd||'',s.done?'✓':'',s.deps||'',status,s.taskNotes||'']);
+  });
+  // Completion summary
+  schRows.push(['','','','','','','','','','','','','','','']);
+  schRows.push(['SUMMARY','Total tasks',state.schedule.length,'Done',doneTasks,'Completion',
+    state.schedule.length?Math.round(doneTasks/state.schedule.length*100)+'%':'0%',
+    'Planned completion',latestEnd||'—','','','','','','']);
+  const ws4=XLSX.utils.aoa_to_sheet(schRows);
+  ws4['!cols']=[{wch:4},{wch:36},{wch:16},{wch:16},{wch:8},{wch:8},
+    {wch:14},{wch:14},{wch:10},{wch:14},{wch:14},{wch:6},{wch:30},{wch:12},{wch:40}];
+  XLSX.utils.book_append_sheet(wb,ws4,'📅 Schedule');
 
-  // Sheet 5: Compliance
-  const compRows=[['Item','Category','Reference','Due Date','Done Date','Cost','Notes']];
-  (state.compliance||[]).forEach(c=>compRows.push([c.item,c.category,c.reference,c.dueDate||'',c.doneDate||'',+c.cost||0,c.notes||'']));
-  const ws5=XLSX.utils.aoa_to_sheet(compRows);
-  ws5['!cols']=[{wch:55},{wch:14},{wch:40},{wch:14},{wch:14},{wch:10},{wch:40}];
-  XLSX.utils.book_append_sheet(wb,ws5,'Compliance');
+  // ──────────────────────────────────────────────
+  // Sheet 5 · 🏗 Progress Claims
+  // ──────────────────────────────────────────────
+  const clmHdr=['Claim #','Claim Date','HIA Milestone','Amount ($)','Invoice Ref','Status','Date Paid','Notes'];
+  const clmRows=[
+    [p.name+' — Progress Claims','','','','','','',''],
+    ['','','','','','','',''],
+    clmHdr,
+  ];
+  const claims=state.claims||[];
+  claims.forEach(c=>clmRows.push([c.claimNo||'',c.date||'',c.milestone||'',fm(+c.amount||0),
+    c.invoiceRef||'',c.status||'',c.paidDate||'',c.notes||'']));
+  const totalClaimed=claims.reduce((s,c)=>s+(+c.amount||0),0);
+  const totalPaid=claims.filter(c=>c.status==='Paid').reduce((s,c)=>s+(+c.amount||0),0);
+  clmRows.push(['','','','','','','','']);
+  clmRows.push(['','TOTAL CLAIMED','',fm(totalClaimed),'','','','']);
+  clmRows.push(['','TOTAL PAID (status=Paid)','',fm(totalPaid),'','','','']);
+  clmRows.push(['','OUTSTANDING','',fm(Math.max(0,totalClaimed-totalPaid)),'','','','']);
+  const ws5=XLSX.utils.aoa_to_sheet(clmRows);
+  ws5['!cols']=[{wch:8},{wch:14},{wch:24},{wch:14},{wch:16},{wch:12},{wch:14},{wch:40}];
+  XLSX.utils.book_append_sheet(wb,ws5,'🏗 Progress Claims');
 
-  // Sheet 6: OFI Checklist
-  const ofiRows=[['Room','Item','Checked','Notes']];
-  (state.ofi||[]).forEach(o=>ofiRows.push([o.room,o.item,o.checked?'✓':'',o.notes||'']));
-  const ws6=XLSX.utils.aoa_to_sheet(ofiRows);
-  ws6['!cols']=[{wch:18},{wch:55},{wch:8},{wch:30}];
-  XLSX.utils.book_append_sheet(wb,ws6,'OFI Checklist');
+  // ──────────────────────────────────────────────
+  // Sheet 6 · 🔍 VBA Inspections
+  // ──────────────────────────────────────────────
+  const insHdr=['Stage','Description','Mandatory','Planned Date','Actual Date','Inspector','Result','Notes'];
+  const insRows=[
+    [p.name+' — VBA Mandatory Inspections','','','','','','',''],
+    ['All permitted works require mandatory inspections under Building Act 1993 (Vic)','','','','','','',''],
+    ['','','','','','','',''],
+    insHdr,
+  ];
+  (state.inspections||[]).forEach(ins=>insRows.push([
+    ins.stage||'',ins.description||'',ins.mandatory?'✓ Mandatory':'Optional',
+    ins.plannedDate||'',ins.actualDate||'',ins.inspector||'',ins.result||'',ins.notes||'']));
+  const ws6=XLSX.utils.aoa_to_sheet(insRows);
+  ws6['!cols']=[{wch:20},{wch:55},{wch:12},{wch:14},{wch:14},{wch:22},{wch:10},{wch:40}];
+  XLSX.utils.book_append_sheet(wb,ws6,'🔍 VBA Inspections');
 
-  // Sheet 7: Risk Register
-  const riskRows=[['Risk','Category','Likelihood','Impact','Mitigation','Owner','Status']];
-  (state.risks||[]).forEach(r=>riskRows.push([r.risk,r.category,r.likelihood,r.impact,r.mitigation,r.owner,r.status]));
-  const ws7=XLSX.utils.aoa_to_sheet(riskRows);
-  ws7['!cols']=[{wch:40},{wch:16},{wch:12},{wch:10},{wch:55},{wch:14},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws7,'Risk Register');
+  // ──────────────────────────────────────────────
+  // Sheet 7 · ⚖ VIC Compliance
+  // ──────────────────────────────────────────────
+  const compHdr=['Item','Category','Legislative Reference','Est. Cost ($)','Due Date','Completed Date','Done','Notes'];
+  const compRows=[
+    [p.name+' — VIC Compliance Checklist','','','','','','',''],
+    ['Reference: Residential Tenancies Act 2021 (Vic), Building Act 1993, Building Regulations 2018','','','','','','',''],
+    ['','','','','','','',''],
+    compHdr,
+  ];
+  (state.compliance||[]).forEach(c=>compRows.push([
+    c.item||'',c.category||'',c.reference||'',+c.cost||0,
+    c.dueDate||'',c.doneDate||'',c.doneDate?'✓':'',c.notes||'']));
+  const ws7=XLSX.utils.aoa_to_sheet(compRows);
+  ws7['!cols']=[{wch:58},{wch:16},{wch:42},{wch:12},{wch:14},{wch:14},{wch:6},{wch:42}];
+  XLSX.utils.book_append_sheet(wb,ws7,'⚖ VIC Compliance');
 
-  // Sheet 8: Quotes
-  const quotRows=[['Scope','Trade','Company','Contact','Phone','Amount','Date','Status','Notes']];
-  (state.quotes||[]).forEach(q=>quotRows.push([q.scope,q.trade,q.company,q.contactName,q.phone,+q.amount||0,q.date,q.status,q.notes]));
-  const ws8=XLSX.utils.aoa_to_sheet(quotRows);
-  ws8['!cols']=[{wch:40},{wch:16},{wch:28},{wch:20},{wch:16},{wch:12},{wch:14},{wch:12},{wch:35}];
-  XLSX.utils.book_append_sheet(wb,ws8,'Quotes');
+  // ──────────────────────────────────────────────
+  // Sheet 8 · 📝 Site Diary
+  // ──────────────────────────────────────────────
+  const dryHdr=['Date','Weather','People on Site / Trades Present','Site Notes & Progress'];
+  const dryRows=[
+    [p.name+' — Site Diary','','',''],
+    ['Address: '+( p.address||'—'),'','',''],
+    ['','','',''],
+    dryHdr,
+  ];
+  [...(state.diary||[])].sort((a,b)=>a.date>b.date?1:-1)
+    .forEach(d=>dryRows.push([d.date||'',d.weather||'',d.people||'',d.notes||'']));
+  const ws8=XLSX.utils.aoa_to_sheet(dryRows);
+  ws8['!cols']=[{wch:14},{wch:18},{wch:45},{wch:80}];
+  XLSX.utils.book_append_sheet(wb,ws8,'📝 Site Diary');
 
-  // Sheet 9: Contacts
-  const contRows=[['Name','Role','Company','Phone','Email','VBA Licence','ABN','Insurance Expiry','Rating','Notes']];
-  (state.contacts||[]).forEach(c=>contRows.push([c.name,c.role,c.company,c.phone,c.email,c.license,c.abn||'',c.insuranceExpiry||'',['','★','★★','★★★','★★★★','★★★★★'][+c.rating||0]||'',c.notes]));
-  const ws9=XLSX.utils.aoa_to_sheet(contRows);
-  ws9['!cols']=[{wch:24},{wch:18},{wch:28},{wch:16},{wch:30},{wch:16},{wch:16},{wch:16},{wch:8},{wch:35}];
-  XLSX.utils.book_append_sheet(wb,ws9,'Contacts');
+  // ──────────────────────────────────────────────
+  // Sheet 9 · 🏡 OFI Checklist
+  // ──────────────────────────────────────────────
+  const ofiHdr=['✓','Room / Zone','Checklist Item','Notes'];
+  const ofiRows=[
+    [p.name+' — Open for Inspection Checklist','','',''],
+    ['Complete before every Open for Inspection (allow 30 min)','','',''],
+    ['','','',''],
+    ofiHdr,
+  ];
+  let lastRoom='';
+  (state.ofi||[]).forEach(o=>{
+    if(o.room!==lastRoom){
+      if(lastRoom)ofiRows.push(['','','','']);
+      ofiRows.push(['— '+o.room.toUpperCase()+' —','','','']);
+      lastRoom=o.room;
+    }
+    ofiRows.push([o.checked?'✓':'○',o.room||'',o.item||'',o.notes||'']);
+  });
+  const checkedCount=(state.ofi||[]).filter(o=>o.checked).length;
+  const totalOfi=(state.ofi||[]).length;
+  ofiRows.push(['','','','']);
+  ofiRows.push([checkedCount+'/'+totalOfi+' complete','','','']);
+  const ws9=XLSX.utils.aoa_to_sheet(ofiRows);
+  ws9['!cols']=[{wch:6},{wch:18},{wch:58},{wch:35}];
+  XLSX.utils.book_append_sheet(wb,ws9,'🏡 OFI Checklist');
 
-  // Sheet 10: Site Diary
-  const diaryRows=[['Date','Weather','People on site','Notes']];
-  [...(state.diary||[])].sort((a,b)=>a.date>b.date?1:-1).forEach(d=>diaryRows.push([d.date,d.weather,d.people,d.notes]));
-  const ws10=XLSX.utils.aoa_to_sheet(diaryRows);
-  ws10['!cols']=[{wch:14},{wch:18},{wch:40},{wch:80}];
-  XLSX.utils.book_append_sheet(wb,ws10,'Site Diary');
+  // ──────────────────────────────────────────────
+  // Sheet 10 · ⚠ Risk Register
+  // ──────────────────────────────────────────────
+  const rskHdr=['#','Risk Description','Category','Likelihood','Impact','Risk Rating','Mitigation Strategy','Owner','Status'];
+  const rskRows=[
+    [p.name+' — Risk Register','','','','','','','',''],
+    ['','','','','','','','',''],
+    rskHdr,
+  ];
+  const riskScore={'Low':1,'Medium':2,'High':3};
+  (state.risks||[]).forEach((r,i)=>{
+    const rating=(riskScore[r.likelihood]||0)*(riskScore[r.impact]||0);
+    const ratingLabel=rating>=6?'HIGH':rating>=3?'MEDIUM':'LOW';
+    rskRows.push([i+1,r.risk||'',r.category||'',r.likelihood||'',r.impact||'',ratingLabel,
+      r.mitigation||'',r.owner||'',r.status||'']);
+  });
+  const ws10=XLSX.utils.aoa_to_sheet(rskRows);
+  ws10['!cols']=[{wch:4},{wch:42},{wch:16},{wch:12},{wch:10},{wch:12},{wch:55},{wch:14},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws10,'⚠ Risk Register');
 
-  // Sheet 11: Progress Claims
-  const claimRows=[['Claim #','Date','Milestone','Amount','Invoice Ref','Status','Date Paid','Notes']];
-  (state.claims||[]).forEach(c=>claimRows.push([c.claimNo,c.date,c.milestone,+c.amount||0,c.invoiceRef,c.status,c.paidDate||'',c.notes||'']));
-  const ws11=XLSX.utils.aoa_to_sheet(claimRows);
-  ws11['!cols']=[{wch:8},{wch:14},{wch:22},{wch:14},{wch:14},{wch:12},{wch:14},{wch:35}];
-  XLSX.utils.book_append_sheet(wb,ws11,'Progress Claims');
+  // ──────────────────────────────────────────────
+  // Sheet 11 · 💬 Quote Comparison
+  // ──────────────────────────────────────────────
+  const qtHdr=['Scope of Work','Trade','Company','Contact Person','Phone','Quote Amount ($)','Quote Date','Status','Notes'];
+  const qtRows=[
+    [p.name+' — Quote Comparison Register','','','','','','','',''],
+    ['Use this sheet to compare quotes for each trade/scope. Accepted quotes should be entered in Work Items sheet.','','','','','','','',''],
+    ['','','','','','','','',''],
+    qtHdr,
+  ];
+  (state.quotes||[]).forEach(q=>qtRows.push([q.scope||'',q.trade||'',q.company||'',q.contactName||'',
+    q.phone||'',fm(+q.amount||0),q.date||'',q.status||'',q.notes||'']));
+  const ws11=XLSX.utils.aoa_to_sheet(qtRows);
+  ws11['!cols']=[{wch:40},{wch:16},{wch:28},{wch:20},{wch:16},{wch:14},{wch:14},{wch:14},{wch:38}];
+  XLSX.utils.book_append_sheet(wb,ws11,'💬 Quote Comparison');
 
-  const fn=`MelbourneRenoMaster_${(p.name||'Project').replace(/\s+/g,'_')}_${isoToday()}.xlsx`;
+  // ──────────────────────────────────────────────
+  // Sheet 12 · 🔨 Defects & Punch List
+  // ──────────────────────────────────────────────
+  const pnHdr=['#','Description','Room / Location','Trade Responsible','Severity','Status','Reported Date','Resolved Date','Notes'];
+  const pnRows=[
+    [p.name+' — Defects & Punch List (DLP)','','','','','','','',''],
+    ['DLP Start: '+(p.dlpStartDate||'—')+'  |  DLP End: '+(p.dlpStartDate?addMonths(p.dlpStartDate,p.dlpMonths||12):'—')+'  |  Report defects in writing to builder within DLP period','','','','','','','',''],
+    ['','','','','','','','',''],
+    pnHdr,
+  ];
+  const sevOrder=['High','Medium','Low'];
+  sevOrder.forEach(sev=>{
+    const items=(state.punch||[]).filter(d=>d.severity===sev);
+    if(!items.length)return;
+    pnRows.push(['— '+sev.toUpperCase()+' PRIORITY —','','','','','','','','']);
+    items.forEach((d,i)=>pnRows.push([i+1,d.description||'',d.location||'',d.trade||'',d.severity||'',
+      d.status||'',d.reportedDate||d.date||'',d.resolvedDate||'',d.notes||'']));
+  });
+  const openHigh=(state.punch||[]).filter(d=>d.severity==='High'&&d.status!=='Fixed').length;
+  pnRows.push(['','','','','','','','','']);
+  pnRows.push(['OPEN DEFECTS: '+( (state.punch||[]).filter(d=>d.status!=='Fixed').length),
+    'HIGH SEVERITY OPEN: '+openHigh,'','','','','','','']);
+  const ws12=XLSX.utils.aoa_to_sheet(pnRows);
+  ws12['!cols']=[{wch:4},{wch:40},{wch:20},{wch:20},{wch:10},{wch:10},{wch:14},{wch:14},{wch:38}];
+  XLSX.utils.book_append_sheet(wb,ws12,'🔨 Defects & Punch List');
+
+  // ── Save ──
+  const fn=`${(p.name||'Project').replace(/[^a-zA-Z0-9一-龥]/g,'_')}_Reno_Master_${today}.xlsx`;
   XLSX.writeFile(wb,fn);
+  showToast('📊 Excel exported — '+fn.slice(0,40));
 }
 
 
@@ -3373,6 +3720,7 @@ function importJSON(file){
     try{
       const d=JSON.parse(e.target.result);
       if(!d.project)throw new Error('Not a valid Melbourne Reno Master backup');
+      if(!confirm('Restore project from backup?\n\nThis will overwrite your current project data. Continue?'))return;
       state=migrate(d);
       saveCurrentProject();
       renderAll();
@@ -3407,14 +3755,13 @@ function init(){
   initTabs();
   renderAll();
 
-  // Project selector
   $('project-selector').addEventListener('change',e=>{
     _currentId=e.target.value;
     loadProject(_currentId);
     renderAll();
   });
   $('btn-new-project').addEventListener('click',newProject);
-  // Dark mode toggle
+
   const darkBtn=$('btn-dark');
   if(darkBtn){
     const savedDark=localStorage.getItem('mrm_dark')==='1';
@@ -3440,10 +3787,8 @@ function init(){
     renderAll();
   });
 
-  // Header export button
   $('btn-export-excel').addEventListener('click',exportXLSX);
 
-  // Wire all tabs
   wireProject();
   wireContacts();
   wireBudget();
@@ -3457,20 +3802,19 @@ function init(){
   wireRisks();
   wireQuotes();
 
-  // Export tab buttons
   $('ex-xlsx').addEventListener('click',exportXLSX);
-  $('ex-sow').addEventListener('click',exportSOW);
-  $('ex-report').addEventListener('click',exportReportCard);
+  $('ex-sow')?.addEventListener('click',exportSOW);
+  $('ex-report')?.addEventListener('click',exportReportCard);
   wireSettings();
-  // Undo button
+
   $('btn-undo').addEventListener('click',undoLastSave);
   $('btn-cloud-push')?.addEventListener('click',async()=>{
-    const tok=gistToken(); const id=gistId();
+    const tok=gistToken();const id=gistId();
     if(!tok||!id){showToast('Set GitHub token & Gist ID in ⚙ Settings first','bg-slate-600');return;}
     await gistPush();
   });
-  // Show cloud btn if configured
   if(gistToken()&&gistId())$('btn-cloud-push')?.classList.remove('hidden');
+
   $('ex-json').addEventListener('click',exportJSON);
   $('ex-import').addEventListener('change',e=>{if(e.target.files[0])importJSON(e.target.files[0]);});
   $('ex-clear').addEventListener('click',()=>{
@@ -3480,7 +3824,7 @@ function init(){
     location.reload();
   });
 
-  // Autosave on any input/change anywhere + dirty-flag for beforeunload warning
+  // Autosave + dirty-flag for beforeunload warning
   let _saveTimer;
   let _isDirty=false;
   document.addEventListener('input',()=>{
@@ -3489,8 +3833,7 @@ function init(){
     _saveTimer=setTimeout(()=>{ saveCurrentProject(); _isDirty=false; },800);
   });
   document.addEventListener('change',()=>{
-    _isDirty=true;
-    clearTimeout(_saveTimer);
+eout(_saveTimer);
     _saveTimer=setTimeout(()=>{ saveCurrentProject(); _isDirty=false; },800);
   });
   window.addEventListener('beforeunload',e=>{
@@ -3498,38 +3841,7 @@ function init(){
   });
 }
 
-
-  // ─── PWA: register service worker + manifest ───
-  (function(){
-    // Inline manifest as blob
-    const manifest={
-      name:'Melbourne Reno Master',short_name:'RenoMaster',
-      description:'Melbourne property renovation management tool',
-      start_url:window.location.href,display:'standalone',
-      background_color:'#f8fafc',theme_color:'#6366f1',
-      icons:[{src:'https://img.icons8.com/fluency/96/000000/home-page.png',sizes:'96x96',type:'image/png'}]
-    };
-    const blob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
-    const mUrl=URL.createObjectURL(blob);
-    const link=document.createElement('link');link.rel='manifest';link.href=mUrl;
-    document.head.appendChild(link);
-
-    // Minimal service worker for offline caching
-    if('serviceWorker' in navigator){
-      const swCode=`
-const CACHE='mrm-v1';
-const ASSETS=[self.location.href];
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
-self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
-`;
-      const swBlob=new Blob([swCode],{type:'application/javascript'});
-      const swUrl=URL.createObjectURL(swBlob);
-      navigator.serviceWorker.register(swUrl).catch(()=>{});
-    }
-  })();
-
-
-// ==================== AUTH / LOGIN ====================
+// ==================== AUTH ====================
 const AUTH_HASH='8c0bfc5bc82e3462832f0f4222d954dc7249c315289636451d6bd649739ca2e4';
 const AUTH_KEY='mrm_auth_session';
 
@@ -3550,7 +3862,7 @@ async function attemptLogin(){
     document.getElementById('login-overlay').style.display='none';
     const appRoot=document.getElementById('app-root');
     if(appRoot)appRoot.style.display='';
-    renderAll(); // refresh all tabs now overlay is gone
+    renderAll();
   } else {
     const err=document.getElementById('login-error');
     if(err)err.style.display='block';
@@ -3561,7 +3873,6 @@ async function attemptLogin(){
 }
 
 function initAuth(){
-  // Already authenticated this session?
   if(sessionStorage.getItem(AUTH_KEY)==='1'){
     document.getElementById('login-overlay').style.display='none';
     document.getElementById('app-root').style.display='';
@@ -3571,14 +3882,11 @@ function initAuth(){
   document.getElementById('login-pwd')?.addEventListener('keydown',e=>{
     if(e.key==='Enter')attemptLogin();
   });
-  // Focus password field
   setTimeout(()=>document.getElementById('login-pwd')?.focus(),100);
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  // Always init the app (DOM is present even while hidden behind overlay)
   init();
-  // Then handle auth visibility
   initAuth();
 });
 </script>
