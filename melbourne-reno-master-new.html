@@ -1032,7 +1032,11 @@ function migrate(d){
     if(b.dep40===undefined)b.dep40=0;
     if(b.dep43===undefined)b.dep43=0;
     if(!b.notes)b.notes='';
-    if(!b.cat)b.cat='Renovation Works';
+    if(!b.cat||b.cat==='Renovation')b.cat='Renovation Works';
+    if(b.cat==='Sale Cost')b.cat='Sale Costs';
+    if(b.cat==='Pest Control')b.cat='Pest & Hazmat';
+    if(b.cat==='Permits & Council')b.cat='Permits & Compliance';
+    if(b.cat==='Maintenance')b.cat='Maintenance & Repairs';
     if(!b.invoiceDate)b.invoiceDate='';
     if(!b.payMethod)b.payMethod='';
     if(!b.invoiceRef)b.invoiceRef='';
@@ -1307,9 +1311,10 @@ function budgetTotals(){
   const cont=exGSTTotal*(state.project.contingencyPct||0)/100;
   const grand=renoTotal+cont; // grand = GST-inclusive total + contingency
   // Per-category subtotals
-  const permitTotal=sum(state.budget.filter(b=>b.cat==='Permits & Compliance'));
-  const pestTotal=sum(state.budget.filter(b=>b.cat==='Pest & Hazmat'));
-  const maintTotal=sum(state.budget.filter(b=>b.cat==='Maintenance & Repairs'));
+  const sumCat=arr=>arr.reduce((t,b)=>t+lineTotal(b),0);
+  const permitTotal=sumCat(state.budget.filter(b=>b.cat==='Permits & Compliance'));
+  const pestTotal=sumCat(state.budget.filter(b=>b.cat==='Pest & Hazmat'));
+  const maintTotal=sumCat(state.budget.filter(b=>b.cat==='Maintenance & Repairs'));
   return{renoTotal,renoPaid,saleTotal,salePaid,gstTotal,cont,grand,itemCount:reno.length,permitTotal,pestTotal,maintTotal};
 }
 function refreshBudgetFilters(){
