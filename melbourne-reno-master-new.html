@@ -31,7 +31,7 @@
     .chip-sm{padding:1px 6px;font-size:10px;}
     .pri-A{background:#fef3c7;color:#92400e;}.pri-A2{background:#fef9c3;color:#854d0e;}
     .pri-B{background:#dbeafe;color:#1e40af;}.pri-C{background:#f1f5f9;color:#475569;}
-    .mode-DIY{background:#dcfce7;color:#166534;}.mode-Trade{background:#e0e7ff;color:#3730a3;}.mode-Both{background:#fae8ff;color:#86198f;}.mode-Cash{background:#fef9c3;color:#713f12;}
+    .mode-DIY{background:#dcfce7;color:#166534;}.mode-Trade{background:#e0e7ff;color:#3730a3;}.mode-Both{background:#fae8ff;color:#86198f;}
     .pay-bar{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;}
     .pay-bar-fill{height:6px;background:#10b981;border-radius:3px;transition:width .2s;}
     .pay-bar-over{background:#ef4444;}
@@ -125,7 +125,7 @@
       <div id="kpi-items" class="text-xs text-slate-500 mt-1">0 line items</div>
     </div>
     <div class="bg-white rounded-xl border border-slate-200 p-4">
-      <div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">GST (10%)</div>
+      <div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">GST component (within prices)</div>
       <div id="kpi-gst" class="mono text-xl lg:text-2xl font-bold mt-1 text-slate-700">$0</div>
       <div class="text-xs text-slate-500 mt-1">on taxable items</div>
     </div>
@@ -367,16 +367,18 @@
     <div class="flex flex-wrap items-center gap-2">
       <div class="inline-flex rounded-lg overflow-hidden border border-slate-300 text-xs font-semibold">
         <button data-scope="all"     class="b-scope px-2.5 py-1.5 bg-white">All</button>
-        <button data-scope="reno"    class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Renovation</button>
+        <button data-scope="reno"    class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Reno Works</button>
         <button data-scope="permit"  class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Permits</button>
-        <button data-scope="pest"    class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Pest</button>
-        <button data-scope="sale"    class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Sale costs</button>
+        <button data-scope="pest"    class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Pest/Hazmat</button>
+        <button data-scope="maint"   class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Maintenance</button>
+        <button data-scope="sale"    class="b-scope px-2.5 py-1.5 bg-white border-l border-slate-300">Sale Costs</button>
       </div>
       <select id="b-filter-room"  class="rounded-lg border-slate-300 border px-2 py-1.5 text-sm bg-white"><option value="">All rooms</option></select>
       <select id="b-filter-trade" class="rounded-lg border-slate-300 border px-2 py-1.5 text-sm bg-white"><option value="">All trades</option></select>
       <button id="b-add"            class="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg">+ Add line</button>
       <button id="b-add-permit"    class="bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Add a Permits & Council line item">+ Permit</button>
       <button id="b-add-pest"      class="bg-lime-700 hover:bg-lime-800 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Add a Pest Control line item">+ Pest</button>
+      <button id="b-add-maint"     class="bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Add a Maintenance line item">+ Maintenance</button>
       <button id="b-add-sale"      class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg">+ Sale cost</button>
       <button id="b-inject-council" class="bg-violet-100 hover:bg-violet-200 text-violet-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common VIC council & permit fees">🏛 Council Fees</button>
       <button id="b-inject-hidden" class="bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common hidden costs">+ Hidden costs</button>
@@ -389,13 +391,14 @@
     <div class="overflow-x-auto scrollbar-thin">
       <table class="w-full text-sm">
         <thead class="bg-slate-50 border-b border-slate-200"><tr class="text-left text-[11px] uppercase tracking-wider text-slate-500">
-          <th class="px-2 py-2.5 font-semibold">Pri</th><th class="px-2 py-2.5 font-semibold">Description</th><th class="px-2 py-2.5 font-semibold">Room</th><th class="px-2 py-2.5 font-semibold">Trade</th><th class="px-2 py-2.5 font-semibold">Mode</th><th class="px-2 py-2.5 font-semibold" title="Materials (M) / Labour (L) / Both — used for depreciation schedules (Div40 Plant & Equipment vs Div43 Capital Works)">Mat/Lab</th><th class="px-2 py-2.5 font-semibold text-right">Qty</th><th class="px-2 py-2.5 font-semibold">Unit</th><th class="px-2 py-2.5 font-semibold text-right">Unit $</th><th class="px-2 py-2.5 font-semibold text-center">GST</th><th class="px-2 py-2.5 font-semibold text-right">Total</th><th class="px-2 py-2.5 font-semibold">Paid</th><th class="px-2 py-2.5"></th>
+          <th class="px-2 py-2.5 font-semibold">Pri</th><th class="px-2 py-2.5 font-semibold">Description</th><th class="px-2 py-2.5 font-semibold">Room</th><th class="px-2 py-2.5 font-semibold">Trade</th><th class="px-2 py-2.5 font-semibold">Mode</th><th class="px-2 py-2.5 font-semibold" title="Materials (M) / Labour (L) / Both — used for depreciation schedules (Div40 Plant & Equipment vs Div43 Capital Works)">Mat/Lab</th><th class="px-2 py-2.5 font-semibold text-right">Qty</th><th class="px-2 py-2.5 font-semibold">Unit</th><th class="px-2 py-2.5 font-semibold text-right">Unit $</th><th class="px-2 py-2.5 font-semibold text-center" title="GST Inclusive? ✓ = the price you entered ALREADY includes GST (10%). System extracts the GST component (÷11) for BAS reporting. Leave unticked for Cash payments or genuine GST-free items.">GST incl?</th><th class="px-2 py-2.5 font-semibold text-right">Total</th><th class="px-2 py-2.5 font-semibold">Paid</th><th class="px-2 py-2.5"></th>
         </tr></thead>
         <tbody id="budget-tbody"></tbody>
         <tfoot class="bg-slate-50 border-t-2 border-slate-200 font-semibold">
           <tr><td class="px-2 py-2.5" colspan="9">Renovation · subtotal</td><td></td><td class="px-2 py-2.5 text-right mono" id="b-sum-total">$0</td><td class="px-2 py-2.5 text-right mono" id="b-sum-paid">$0</td><td></td></tr>
           <tr id="b-permit-foot" class="hidden"><td class="px-2 py-2.5 text-violet-700" colspan="9">Permits &amp; Council · subtotal</td><td></td><td class="px-2 py-2.5 text-right mono text-violet-700" id="b-sum-permit">$0</td><td class="px-2 py-2.5"></td><td></td></tr>
           <tr id="b-pest-foot" class="hidden"><td class="px-2 py-2.5 text-lime-700" colspan="9">Pest Control · subtotal</td><td></td><td class="px-2 py-2.5 text-right mono text-lime-700" id="b-sum-pest">$0</td><td class="px-2 py-2.5"></td><td></td></tr>
+          <tr id="b-maint-foot" class="hidden"><td class="px-2 py-2.5 text-orange-700" colspan="9">Maintenance · subtotal</td><td></td><td class="px-2 py-2.5 text-right mono text-orange-700" id="b-sum-maint">$0</td><td class="px-2 py-2.5"></td><td></td></tr>
           <tr id="b-sale-foot" class="hidden"><td class="px-2 py-2.5 text-amber-700" colspan="9">Sale costs · subtotal</td><td></td><td class="px-2 py-2.5 text-right mono text-amber-700" id="b-sum-saletotal">$0</td><td class="px-2 py-2.5 text-right mono text-amber-700" id="b-sum-salepaid">$0</td><td></td></tr>
         </tfoot>
       </table>
@@ -895,9 +898,9 @@ const RISK_SAMPLES=[
   {risk:'Cash flow — loan drawdown delay',category:'Financial',likelihood:'Low',impact:'High',mitigation:'Confirm construction loan drawdown schedule upfront; maintain 3-month operating cash buffer',owner:'Owner',status:'Open'},
   {risk:'DLP defects not rectified by builder',category:'Legal',likelihood:'Low',impact:'Medium',mitigation:'Document all defects in writing within DLP period; escalate to VBA if builder unresponsive within 28 days',owner:'Owner',status:'Open'},
 ];
-const HIA_MILESTONES=['Base / Slab','Frame','Lock-up','Fixing / Fit-out','Practical Completion','Other'];
-const DEP_OPTIONS=['','Div43 - Capital Works (2.5%/yr)','Div40 - Plant & Equipment'];
-const MODES=['Trade','DIY','Both','Cash'];
+const HIA_MILESTONES=['Pre-start / Demolition','Rough-in (plumbing/electrical)','Lock-up / Waterproofing','Fit-out / Fixing','Practical Completion','Post-completion / DLP','Other'];
+const DEP_OPTIONS=['','Capital Works — structural (Div 43, 2.5%/yr over 40yrs)','Plant & Equipment — appliances/carpet (Div 40, varies)','Repairs & Maintenance — immediate deduction','Non-deductible (personal / land)'];
+const MODES=['Trade','DIY','Both'];
 const PRIORITIES=['A','B','C'];
 const CLAIM_STATUSES=['Pending','Paid','Disputed'];
 const INSP_RESULTS=['','Pass','Fail','Pending'];
@@ -925,8 +928,8 @@ function defaultData(){
       targetSalePrice:0,mortgageBalance:0,purchasePrice:0,yearBuilt:'',council:'',
       propertyType:'House',investmentStrategy:'Renovate & Hold',
       currentWeeklyRent:0,targetWeeklyRent:0,dlpStartDate:'',dlpMonths:12,area:0,
-      rooms:['Kitchen','Bathroom','Laundry','Master Bedroom','Bedroom','Living/Dining','Exterior','Garage'],
-      trades:['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor'],
+      rooms:['Kitchen','Bathroom','Laundry','Master Bedroom','Bedroom 2','Bedroom 3','Living/Dining','Exterior','Subfloor','Roof','Garage'],
+      trades:['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor'],
     },
     contacts:[],budget:[],schedule:[],punch:[],
     inspections:[],compliance:[],ofi:[],risks:[],quotes:[],claims:[],diary:[],
@@ -1029,8 +1032,10 @@ function migrate(d){
     if(b.dep40===undefined)b.dep40=0;
     if(b.dep43===undefined)b.dep43=0;
     if(!b.notes)b.notes='';
-    if(!b.cat)b.cat='Renovation';
+    if(!b.cat)b.cat='Renovation Works';
     if(!b.invoiceDate)b.invoiceDate='';
+    if(!b.payMethod)b.payMethod='';
+    if(!b.invoiceRef)b.invoiceRef='';
   });
   // Migrate contacts
   d.contacts.forEach(c=>{
@@ -1067,7 +1072,7 @@ function migrate(d){
   // Migrate project area and settings
   if(!d.project.area)d.project.area=0;
   // Migrate trades — add any new standard trades not yet in the project list
-  const coreTrades=['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor'];
+  const coreTrades=['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor'];
   if(!Array.isArray(d.project.trades))d.project.trades=coreTrades;
   else coreTrades.forEach(t=>{if(!d.project.trades.includes(t))d.project.trades.push(t);});
   if(!d.settings){d.settings={contingencyPct:d.project.contingencyPct||12,agentCommissionPct:2,councilPermitEst:3500,stampDutyOverridePct:0,costPerSqmTarget:1500};}
@@ -1285,23 +1290,27 @@ function wireContacts(){
 }
 
 // ==================== BUDGET HELPERS ====================
-const RENO_CATS=['Renovation','Permits & Council','Pest Control']; // all non-sale categories
+const RENO_CATS=['Renovation Works','Maintenance & Repairs','Permits & Compliance','Pest & Hazmat','Professional Fees']; // all non-sale categories
 function budgetTotals(){
-  const reno=state.budget.filter(b=>b.cat!=='Sale Cost');
-  const sale=state.budget.filter(b=>b.cat==='Sale Cost');
-  const sum=(arr,gstOnly=false)=>arr.reduce((t,b)=>{
-    const line=(+b.qty||1)*(+b.unitCost||0);
-    return t+(gstOnly?(!b.gst?0:line):line);
-  },0);
-  const renoTotal=sum(reno);const renoPaid=reno.reduce((t,b)=>t+(+b.paidAmt||0),0);
-  const saleTotal=sum(sale);const salePaid=sale.reduce((t,b)=>t+(+b.paidAmt||0),0);
-  const gstTotal=sum(reno,true)*0.1+sum(sale,true)*0.1;
-  const cont=renoTotal*(state.project.contingencyPct||0)/100;
-  const grand=renoTotal+gstTotal+cont;
+  // GST-inclusive pricing: when b.gst=true, the entered price INCLUDES GST.
+  // GST component = price / 11. Ex-GST = price * 10/11.
+  const gstComponent=b=>b.gst?(+b.qty||1)*(+b.unitCost||0)/11:0;
+  const lineTotal=b=>(+b.qty||1)*(+b.unitCost||0); // actual amount paid (incl GST if applicable)
+  const reno=state.budget.filter(b=>b.cat!=='Sale Costs');
+  const sale=state.budget.filter(b=>b.cat==='Sale Costs');
+  const renoTotal=reno.reduce((t,b)=>t+lineTotal(b),0);
+  const renoPaid=reno.reduce((t,b)=>t+(+b.paidAmt||0),0);
+  const saleTotal=sale.reduce((t,b)=>t+lineTotal(b),0);
+  const salePaid=sale.reduce((t,b)=>t+(+b.paidAmt||0),0);
+  const gstTotal=[...reno,...sale].reduce((t,b)=>t+gstComponent(b),0); // GST within the prices
+  const exGSTTotal=renoTotal-reno.reduce((t,b)=>t+gstComponent(b),0); // ex-GST reno for contingency
+  const cont=exGSTTotal*(state.project.contingencyPct||0)/100;
+  const grand=renoTotal+cont; // grand = GST-inclusive total + contingency
   // Per-category subtotals
-  const permitTotal=sum(state.budget.filter(b=>b.cat==='Permits & Council'));
-  const pestTotal=sum(state.budget.filter(b=>b.cat==='Pest Control'));
-  return{renoTotal,renoPaid,saleTotal,salePaid,gstTotal,cont,grand,itemCount:reno.length,permitTotal,pestTotal};
+  const permitTotal=sum(state.budget.filter(b=>b.cat==='Permits & Compliance'));
+  const pestTotal=sum(state.budget.filter(b=>b.cat==='Pest & Hazmat'));
+  const maintTotal=sum(state.budget.filter(b=>b.cat==='Maintenance & Repairs'));
+  return{renoTotal,renoPaid,saleTotal,salePaid,gstTotal,cont,grand,itemCount:reno.length,permitTotal,pestTotal,maintTotal};
 }
 function refreshBudgetFilters(){
   const rooms=state.project.rooms||[];
@@ -1321,10 +1330,11 @@ function renderBudget(){
   const roomF=$('b-filter-room')?.value||'';
   const tradeF=$('b-filter-trade')?.value||'';
   let items=state.budget.filter(b=>{
-    if(scopeFilter==='reno'&&b.cat!=='Renovation')return false;
-    if(scopeFilter==='sale'&&b.cat!=='Sale Cost')return false;
-    if(scopeFilter==='permit'&&b.cat!=='Permits & Council')return false;
-    if(scopeFilter==='pest'&&b.cat!=='Pest Control')return false;
+    if(scopeFilter==='reno'&&b.cat!=='Renovation Works')return false;
+    if(scopeFilter==='sale'&&b.cat!=='Sale Costs')return false;
+    if(scopeFilter==='permit'&&b.cat!=='Permits & Compliance')return false;
+    if(scopeFilter==='pest'&&b.cat!=='Pest & Hazmat')return false;
+    if(scopeFilter==='maint'&&b.cat!=='Maintenance & Repairs')return false;
     if(roomF&&b.room!==roomF)return false;
     if(tradeF&&b.trade!==tradeF)return false;
     return true;
@@ -1338,7 +1348,7 @@ function renderBudget(){
     const total=(+b.qty||1)*(+b.unitCost||0);
     const paidPct=total>0?clamp((+b.paidAmt||0)/total*100,0,100):0;
     const priBg={'A':'bg-red-100 text-red-700','B':'bg-blue-50 text-blue-700','C':'bg-slate-100 text-slate-500'};
-    const isSale=b.cat==='Sale Cost';
+    const isSale=b.cat==='Sale Costs';
     return`<tr class="border-b border-slate-100 hover:bg-slate-50${isSale?' bg-amber-50/30':''}" data-bid="${esc(b.id)}">
       <td class="px-2 py-1.5">
         <select data-f="priority" class="text-[11px] font-semibold rounded px-1 py-0.5 border-0 ${priBg[b.priority]||priBg.B} bg-transparent">
@@ -1362,21 +1372,26 @@ function renderBudget(){
         </select>
       </td>
       <td class="px-2 py-1.5">
-        <select data-f="mlType" class="text-[11px] rounded px-1 py-0.5 border border-slate-200 bg-white" title="M = Materials only · L = Labour only · Both = materials + labour combined · Used for tax depreciation schedules">
-          <option value="">—</option><option${b.mlType==='M'?' selected':''}>M</option><option${b.mlType==='L'?' selected':''}>L</option><option${b.mlType==='Both'?' selected':''}>Both</option>
+        <select data-f="mlType" class="text-[11px] rounded px-1 py-0.5 border border-slate-200 bg-white" title="Cost Type — used for ATO depreciation: Materials (Div 40 plant) · Labour · Both">
+          <option value="">—</option><option value="M"${b.mlType==='M'?' selected':''}>Materials</option><option value="L"${b.mlType==='L'?' selected':''}>Labour</option><option value="Both"${b.mlType==='Both'?' selected':''}>Both</option>
         </select>
       </td>
       <td class="px-2 py-1.5 text-right"><input data-f="qty" type="number" min="0" step="0.1" value="${+b.qty||1}" class="w-14 text-right text-sm border border-slate-200 rounded px-1 py-0.5 mono bg-white"/></td>
       <td class="px-2 py-1.5"><input data-f="unit" value="${esc(b.unit||'lot')}" class="w-16 text-xs border border-slate-200 rounded px-1 py-0.5 bg-white" placeholder="lot"/></td>
       <td class="px-2 py-1.5 text-right"><input data-f="unitCost" type="number" min="0" step="100" value="${+b.unitCost||0}" class="w-24 text-right text-sm border border-slate-200 rounded px-1 py-0.5 mono bg-white"/></td>
-      <td class="px-2 py-1.5 text-center"><input data-f="gst" type="checkbox" ${b.gst?' checked':''} class="w-4 h-4 accent-brand-600 cursor-pointer"/></td>
+      <td class="px-2 py-1.5 text-center">
+        <input data-f="gst" type="checkbox" ${b.gst?' checked':''} class="w-4 h-4 accent-emerald-600 cursor-pointer" title="GST Inclusive? Tick if price already includes GST. System extracts GST = price ÷ 11. Untick for Cash or GST-free items."/>
+        ${b.gst?`<div class="text-[9px] mono text-emerald-700 mt-0.5 leading-none">GST ${fmtMoney(Math.round(((+b.qty||1)*(+b.unitCost||0))/11))}</div>`:'<div class="text-[9px] text-slate-400 mt-0.5 leading-none">no GST</div>'}
+      </td>
       <td class="px-2 py-1.5 text-right mono font-semibold text-sm${isSale?' text-amber-700':''}">${fmtMoney(total)}</td>
       <td class="px-2 py-1.5 min-w-[100px]">
         <div class="flex flex-col gap-0.5">
           <div class="pay-bar cursor-pointer b-pay-bar" title="Click to record payment">
             <div class="pay-bar-fill${paidPct>=100?' pay-bar-over':''}" style="width:${paidPct}%"></div>
           </div>
-          <div class="text-[10px] mono text-slate-500">${fmtMoney(b.paidAmt||0)}</div>
+          ${paidPct>=100
+            ?'<div class="text-[11px] font-bold text-emerald-600 mt-0.5">✓ Paid in full</div>'
+            :'<div class="text-[10px] mono text-slate-500">'+fmtMoney(b.paidAmt||0)+'</div>'}
         </div>
       </td>
       <td class="px-2 py-1.5">
@@ -1392,12 +1407,12 @@ function renderBudget(){
           <label class="block"><span class="text-xs font-semibold text-slate-500">Original quote ($)</span>
             <input data-f="originalCost" type="number" min="0" step="100" value="${+b.originalCost||0}" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm mono bg-white" placeholder="0"/>
           </label>
-          <label class="block"><span class="text-xs font-semibold text-slate-500">Tax category</span>
+          <label class="block"><span class="text-xs font-semibold text-slate-500" title="For ATO tax purposes. Capital Works = structural improvements (Div 43). Plant & Equipment = removable assets like carpets, appliances (Div 40). Repairs = immediately deductible.">Depreciation / Tax</span>
             <select data-f="taxLabel" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm bg-white">
               ${DEP_OPTIONS.map(o=>`<option${o===b.taxLabel?' selected':''}>${esc(o)}</option>`).join('')}
             </select>
           </label>
-          <label class="block"><span class="text-xs font-semibold text-slate-500">HIA milestone</span>
+          <label class="block"><span class="text-xs font-semibold text-slate-500" title="Which build stage this cost belongs to — useful for tracking progress payments">Build Stage</span>
             <select data-f="hia" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm bg-white">
               <option value=""></option>${HIA_MILESTONES.map(h=>`<option${h===b.hia?' selected':''}>${esc(h)}</option>`).join('')}
             </select>
@@ -1405,9 +1420,18 @@ function renderBudget(){
           <label class="block"><span class="text-xs font-semibold text-slate-500">Invoice date</span>
             <input data-f="invoiceDate" type="date" value="${esc(b.invoiceDate||'')}" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm bg-white"/>
           </label>
+          <label class="block"><span class="text-xs font-semibold text-slate-500">Invoice No / Reference</span>
+            <input data-f="invoiceRef" value="${esc(b.invoiceRef||'')}" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm bg-white mono" placeholder="INV-001"/>
+          </label>
           <label class="block"><span class="text-xs font-semibold text-slate-500">Category</span>
             <select data-f="cat" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm bg-white">
-              ${['Renovation','Permits & Council','Pest Control','Sale Cost'].map(c=>`<option${c===b.cat?' selected':''}>${c}</option>`).join('')}
+              ${['Renovation','Permits & Council','Pest Control','Maintenance & Repairs','Sale Costs'].map(c=>`<option${c===b.cat?' selected':''}>${c}</option>`).join('')}
+            </select>
+          </label>
+          <label class="block"><span class="text-xs font-semibold text-slate-500">Payment method</span>
+            <select data-f="payMethod" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm bg-white">
+              <option value="">— Not specified —</option>
+              ${['Bank Transfer (EFT)','Cash (no GST)','Credit Card','BPAY','Direct Debit'].map(m=>`<option${(b.payMethod||'')===m?' selected':''}>${m}</option>`).join('')}
             </select>
           </label>
           <label class="block sm:col-span-2"><span class="text-xs font-semibold text-slate-500">Notes</span>
@@ -1421,18 +1445,21 @@ function renderBudget(){
 
   // Footer totals
   const t=budgetTotals();
-  const hasSale=state.budget.some(b=>b.cat==='Sale Cost');
-  const hasPermit=state.budget.some(b=>b.cat==='Permits & Council');
-  const hasPest=state.budget.some(b=>b.cat==='Pest Control');
+  const hasSale=state.budget.some(b=>b.cat==='Sale Costs');
+  const hasPermit=state.budget.some(b=>b.cat==='Permits & Compliance');
+  const hasPest=state.budget.some(b=>b.cat==='Pest & Hazmat');
+  const hasMaint=state.budget.some(b=>b.cat==='Maintenance & Repairs');
   $('b-sum-total').textContent=fmtMoney(t.renoTotal);
   $('b-sum-paid').textContent=fmtMoney(t.renoPaid);
   if($('b-sum-permit'))$('b-sum-permit').textContent=fmtMoney(t.permitTotal);
   if($('b-sum-pest'))$('b-sum-pest').textContent=fmtMoney(t.pestTotal);
+  if($('b-sum-maint'))$('b-sum-maint').textContent=fmtMoney(t.maintTotal);
   $('b-sum-saletotal').textContent=fmtMoney(t.saleTotal);
   $('b-sum-salepaid').textContent=fmtMoney(t.salePaid);
   const saleRow=$('b-sale-foot');if(saleRow)saleRow.classList.toggle('hidden',!hasSale);
   const permitRow=$('b-permit-foot');if(permitRow)permitRow.classList.toggle('hidden',!hasPermit);
   const pestRow=$('b-pest-foot');if(pestRow)pestRow.classList.toggle('hidden',!hasPest);
+  const maintRow=$('b-maint-foot');if(maintRow)maintRow.classList.toggle('hidden',!hasMaint);
 }
 
 function wireBudget(){
@@ -1454,7 +1481,7 @@ function wireBudget(){
     state.budget.push({
       id:uid(),priority:'B',description:'',room:'',trade:'',mode:'Trade',mlType:'',
       qty:1,unit:'lot',unitCost:0,originalCost:0,taxLabel:'',hia:'',
-      gst:true,paidAmt:0,cat:cat||'Renovation',notes:'',invoiceDate:'',
+      gst:true,paidAmt:0,cat:cat||'Renovation Works',notes:'',invoiceDate:'',
     });
     saveCurrentProject();renderBudget();
     // Scroll to bottom of table
@@ -1463,10 +1490,11 @@ function wireBudget(){
     lastRow?.scrollIntoView({behavior:'smooth',block:'nearest'});
   }
 
-  $('b-add').addEventListener('click',()=>addBudgetLine('Renovation'));
-  $('b-add-permit').addEventListener('click',()=>addBudgetLine('Permits & Council'));
-  $('b-add-pest').addEventListener('click',()=>addBudgetLine('Pest Control'));
-  $('b-add-sale').addEventListener('click',()=>addBudgetLine('Sale Cost'));
+  $('b-add').addEventListener('click',()=>addBudgetLine('Renovation Works'));
+  $('b-add-permit').addEventListener('click',()=>addBudgetLine('Permits & Compliance'));
+  $('b-add-pest').addEventListener('click',()=>addBudgetLine('Pest & Hazmat'));
+  $('b-add-maint')?.addEventListener('click',()=>addBudgetLine('Maintenance & Repairs'));
+  $('b-add-sale').addEventListener('click',()=>addBudgetLine('Sale Costs'));
 
   // ── Council / Permit presets ──
   const COUNCIL_PRESETS=[
@@ -1512,7 +1540,7 @@ function wireBudget(){
         room:d.room||'',trade:d.trade||'',mode:'Trade',mlType:'',
         qty:1,unit:'lot',unitCost:d.estimated,originalCost:d.estimated,
         taxLabel:'',hia:'',gst:true,paidAmt:0,
-        cat:'Renovation',notes:d.note,invoiceDate:'',
+        cat:'Renovation Works',notes:d.note,invoiceDate:'',
       });
     });
     saveCurrentProject();renderBudget();
@@ -1528,7 +1556,7 @@ function wireBudget(){
         room:'',trade:d.trade,mode:'Trade',mlType:'',
         qty:1,unit:'lot',unitCost:d.estimated,originalCost:d.estimated,
         taxLabel:'',hia:'',gst:true,paidAmt:0,
-        cat:'Renovation',notes:d.note,invoiceDate:'',
+        cat:'Renovation Works',notes:d.note,invoiceDate:'',
       });
     });
     saveCurrentProject();renderBudget();
@@ -1540,7 +1568,7 @@ function wireBudget(){
       state.budget.push({
         id:uid(),priority:'B',description:h.name,room:'',trade:'',mode:'Trade',mlType:'',
         qty:1,unit:'lot',unitCost:h.estimated,originalCost:h.estimated,taxLabel:'',hia:'',
-        gst:true,paidAmt:0,cat:h.cat==='Selling'?'Sale Cost':'Renovation',notes:h.note,
+        gst:true,paidAmt:0,cat:h.cat==='Selling'?'Sale Costs':'Renovation Works',notes:h.note,
       });
     });
     saveCurrentProject();renderBudget();
@@ -1549,19 +1577,19 @@ function wireBudget(){
   $('b-seed').addEventListener('click',()=>{
     if(state.budget.length&&!confirm('Replace current budget with sample data?'))return;
     state.budget=[
-      {id:uid(),priority:'A',description:'Kitchen demolition & removal',room:'Kitchen',trade:'Demolition',mode:'Trade',mlType:'L',qty:1,unit:'lot',unitCost:1800,originalCost:1800,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Base / Slab',gst:true,paidAmt:1800,cat:'Renovation',notes:''},
-      {id:uid(),priority:'A',description:'Kitchen cabinetry supply & install',room:'Kitchen',trade:'Carpenter',mode:'Trade',mlType:'Both',qty:1,unit:'lot',unitCost:14500,originalCost:13000,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Fixing / Fit-out',gst:true,paidAmt:7000,cat:'Renovation',notes:''},
-      {id:uid(),priority:'A',description:'Stone benchtop 40mm Caesarstone',room:'Kitchen',trade:'Carpenter',mode:'Trade',mlType:'M',qty:5.5,unit:'lm',unitCost:1200,originalCost:1100,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Fixing / Fit-out',gst:true,paidAmt:0,cat:'Renovation',notes:''},
-      {id:uid(),priority:'A',description:'Kitchen plumbing rough-in & fit-off',room:'Kitchen',trade:'Plumber',mode:'Trade',mlType:'L',qty:1,unit:'lot',unitCost:3200,originalCost:3200,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Lock-up',gst:true,paidAmt:1600,cat:'Renovation',notes:''},
-      {id:uid(),priority:'A',description:'Bathroom full renovation',room:'Bathroom',trade:'Tiler',mode:'Trade',mlType:'Both',qty:1,unit:'lot',unitCost:18500,originalCost:17000,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Fixing / Fit-out',gst:true,paidAmt:9000,cat:'Renovation',notes:''},
-      {id:uid(),priority:'A',description:'Electrical rough-in & switchboard',room:'',trade:'Electrician',mode:'Trade',mlType:'L',qty:1,unit:'lot',unitCost:5500,originalCost:5500,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Lock-up',gst:true,paidAmt:2750,cat:'Renovation',notes:''},
-      {id:uid(),priority:'B',description:'Painting — full interior',room:'',trade:'Painter',mode:'Trade',mlType:'L',qty:220,unit:'m²',unitCost:35,originalCost:32,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Fixing / Fit-out',gst:true,paidAmt:0,cat:'Renovation',notes:''},
-      {id:uid(),priority:'B',description:'Timber floating floor supply & lay',room:'Living/Dining',trade:'',mode:'Trade',mlType:'Both',qty:85,unit:'m²',unitCost:95,originalCost:90,taxLabel:'Div40 - Plant & Equipment',hia:'Fixing / Fit-out',gst:true,paidAmt:0,cat:'Renovation',notes:''},
-      {id:uid(),priority:'B',description:'Split system air conditioner (2 units)',room:'',trade:'Electrician',mode:'Trade',mlType:'Both',qty:2,unit:'unit',unitCost:2400,originalCost:2400,taxLabel:'Div40 - Plant & Equipment',hia:'Practical Completion',gst:true,paidAmt:0,cat:'Renovation',notes:'5yr effective life'},
-      {id:uid(),priority:'C',description:'Landscaping — front garden',room:'Exterior',trade:'Landscaper',mode:'Both',mlType:'Both',qty:1,unit:'lot',unitCost:4500,originalCost:4000,taxLabel:'',hia:'Practical Completion',gst:true,paidAmt:0,cat:'Renovation',notes:''},
-      {id:uid(),priority:'B',description:'Real estate agent commission (est.)',room:'',trade:'',mode:'Trade',mlType:'',qty:1,unit:'lot',unitCost:18000,originalCost:18000,taxLabel:'',hia:'',gst:true,paidAmt:0,cat:'Sale Cost',notes:'~1.8% on $1M'},
-      {id:uid(),priority:'B',description:'Conveyancing & legal (vendor)',room:'',trade:'',mode:'Trade',mlType:'',qty:1,unit:'lot',unitCost:1600,originalCost:1600,taxLabel:'',hia:'',gst:false,paidAmt:0,cat:'Sale Cost',notes:''},
-      {id:uid(),priority:'B',description:'Staging & styling',room:'',trade:'',mode:'Trade',mlType:'',qty:1,unit:'lot',unitCost:4500,originalCost:4500,taxLabel:'',hia:'',gst:true,paidAmt:0,cat:'Sale Cost',notes:''},
+      {id:uid(),priority:'A',description:'Kitchen demolition & removal',room:'Kitchen',trade:'Demolition',mode:'Trade',mlType:'L',qty:1,unit:'lot',unitCost:1800,originalCost:1800,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Base / Slab',gst:true,paidAmt:1800,cat:'Renovation Works',notes:''},
+      {id:uid(),priority:'A',description:'Kitchen cabinetry supply & install',room:'Kitchen',trade:'Carpenter',mode:'Trade',mlType:'Both',qty:1,unit:'lot',unitCost:14500,originalCost:13000,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Fixing / Fit-out',gst:true,paidAmt:7000,cat:'Renovation Works',notes:''},
+      {id:uid(),priority:'A',description:'Stone benchtop 40mm Caesarstone',room:'Kitchen',trade:'Carpenter',mode:'Trade',mlType:'M',qty:5.5,unit:'lm',unitCost:1200,originalCost:1100,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Fixing / Fit-out',gst:true,paidAmt:0,cat:'Renovation Works',notes:''},
+      {id:uid(),priority:'A',description:'Kitchen plumbing rough-in & fit-off',room:'Kitchen',trade:'Plumber',mode:'Trade',mlType:'L',qty:1,unit:'lot',unitCost:3200,originalCost:3200,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Lock-up',gst:true,paidAmt:1600,cat:'Renovation Works',notes:''},
+      {id:uid(),priority:'A',description:'Bathroom full renovation',room:'Bathroom',trade:'Tiler',mode:'Trade',mlType:'Both',qty:1,unit:'lot',unitCost:18500,originalCost:17000,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Fixing / Fit-out',gst:true,paidAmt:9000,cat:'Renovation Works',notes:''},
+      {id:uid(),priority:'A',description:'Electrical rough-in & switchboard',room:'',trade:'Electrician',mode:'Trade',mlType:'L',qty:1,unit:'lot',unitCost:5500,originalCost:5500,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Lock-up',gst:true,paidAmt:2750,cat:'Renovation Works',notes:''},
+      {id:uid(),priority:'B',description:'Painting — full interior',room:'',trade:'Painter',mode:'Trade',mlType:'L',qty:220,unit:'m²',unitCost:35,originalCost:32,taxLabel:'Div43 - Capital Works (2.5%/yr)',hia:'Fixing / Fit-out',gst:true,paidAmt:0,cat:'Renovation Works',notes:''},
+      {id:uid(),priority:'B',description:'Timber floating floor supply & lay',room:'Living/Dining',trade:'',mode:'Trade',mlType:'Both',qty:85,unit:'m²',unitCost:95,originalCost:90,taxLabel:'Div40 - Plant & Equipment',hia:'Fixing / Fit-out',gst:true,paidAmt:0,cat:'Renovation Works',notes:''},
+      {id:uid(),priority:'B',description:'Split system air conditioner (2 units)',room:'',trade:'Electrician',mode:'Trade',mlType:'Both',qty:2,unit:'unit',unitCost:2400,originalCost:2400,taxLabel:'Div40 - Plant & Equipment',hia:'Practical Completion',gst:true,paidAmt:0,cat:'Renovation Works',notes:'5yr effective life'},
+      {id:uid(),priority:'C',description:'Landscaping — front garden',room:'Exterior',trade:'Landscaper',mode:'Both',mlType:'Both',qty:1,unit:'lot',unitCost:4500,originalCost:4000,taxLabel:'',hia:'Practical Completion',gst:true,paidAmt:0,cat:'Renovation Works',notes:''},
+      {id:uid(),priority:'B',description:'Real estate agent commission (est.)',room:'',trade:'',mode:'Trade',mlType:'',qty:1,unit:'lot',unitCost:18000,originalCost:18000,taxLabel:'',hia:'',gst:true,paidAmt:0,cat:'Sale Costs',notes:'~1.8% on $1M'},
+      {id:uid(),priority:'B',description:'Conveyancing & legal (vendor)',room:'',trade:'',mode:'Trade',mlType:'',qty:1,unit:'lot',unitCost:1600,originalCost:1600,taxLabel:'',hia:'',gst:false,paidAmt:0,cat:'Sale Costs',notes:''},
+      {id:uid(),priority:'B',description:'Staging & styling',room:'',trade:'',mode:'Trade',mlType:'',qty:1,unit:'lot',unitCost:4500,originalCost:4500,taxLabel:'',hia:'',gst:true,paidAmt:0,cat:'Sale Costs',notes:''},
     ];
     saveCurrentProject();renderBudget();
   });
@@ -2507,13 +2535,13 @@ function computeWarnings(){
 
   // 8. Council permit budget reminder
   const councilEst=+(state.settings?.councilPermitEst||0);
-  const hasPermitBudget=state.budget.some(b=>b.cat==='Permits & Council');
+  const hasPermitBudget=state.budget.some(b=>b.cat==='Permits & Compliance');
   if(councilEst>0&&!hasPermitBudget&&state.budget.length>0)
     warnings.push(`🏛 No Permits & Council costs in budget yet — estimated ${fmtMoney(councilEst)} based on Settings. Add via Budget → 🏛 Council Fees.`);
 
   // 9. Agent commission reminder
   const agentPct2=+(state.settings?.agentCommissionPct||0);
-  const hasAgentBudget=state.budget.some(b=>b.cat==='Sale Cost'&&/agent|commission/i.test(b.description||''));
+  const hasAgentBudget=state.budget.some(b=>b.cat==='Sale Costs'&&/agent|commission/i.test(b.description||''));
   const saleP=+state.project.targetSalePrice||0;
   if(agentPct2>0&&!hasAgentBudget&&saleP>0)
     warnings.push(`💰 Agent commission not in Sale Costs budget — at ${agentPct2}% that's approx ${fmtMoney(Math.round(saleP*agentPct2/100))}. Add via Budget → + Sale cost.`);
@@ -2604,7 +2632,7 @@ function renderDashboard(){
   if(prgLbl)prgLbl.textContent=`${doneCt}/${allTasks.length} tasks · ${prgPct}%`;
 
   // ── Scope Creep ──
-  const trackedItems=state.budget.filter(b=>b.originalCost>0&&b.cat!=='Sale Cost');
+  const trackedItems=state.budget.filter(b=>b.originalCost>0&&b.cat!=='Sale Costs');
   if(trackedItems.length){
     const origTotal=trackedItems.reduce((s,b)=>s+(+b.originalCost||0)*(+b.qty||1),0);
     const currTotal=trackedItems.reduce((s,b)=>s+(+b.unitCost||0)*(+b.qty||1),0);
@@ -2642,7 +2670,7 @@ function renderDashboard(){
   const saleCard=$('sale-card');
   if(salePrice>0){
     saleCard?.classList.remove('hidden');
-    const saleCosts=state.budget.filter(b=>b.cat==='Sale Cost').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);
+    const saleCosts=state.budget.filter(b=>b.cat==='Sale Costs').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);
     const net=salePrice-(+p.mortgageBalance||0)-saleCosts-t.grand;
     $('se-target').textContent=fmtMoney(salePrice);
     $('se-mort').textContent='− '+fmtMoney(p.mortgageBalance||0);
@@ -2652,7 +2680,7 @@ function renderDashboard(){
     const agentPct=+(state.settings?.agentCommissionPct||0);
     const agentHintEl=$('se-agent-hint');
     if(agentHintEl){
-      const hasAgentLine=state.budget.some(b=>b.cat==='Sale Cost'&&/agent|commission/i.test(b.description||''));
+      const hasAgentLine=state.budget.some(b=>b.cat==='Sale Costs'&&/agent|commission/i.test(b.description||''));
       if(agentPct>0&&!hasAgentLine){
         const est=Math.round(salePrice*agentPct/100);
         agentHintEl.textContent=`Est. agent @ ${agentPct}%: ${fmtMoney(est)} — add to Budget → Sale Cost`;
@@ -2758,7 +2786,7 @@ function renderDashboard(){
 
   // ── Spend by Room ──
   const roomTotals={};
-  state.budget.filter(b=>b.cat!=='Sale Cost'&&b.room).forEach(b=>{
+  state.budget.filter(b=>b.cat!=='Sale Costs'&&b.room).forEach(b=>{
     const line=(+b.qty||1)*(+b.unitCost||0);
     roomTotals[b.room]=(roomTotals[b.room]||0)+line;
   });
@@ -2775,7 +2803,7 @@ function renderDashboard(){
 
   // ── Spend by Trade ──
   const tradeTotals={};
-  state.budget.filter(b=>b.cat!=='Sale Cost'&&b.trade).forEach(b=>{
+  state.budget.filter(b=>b.cat!=='Sale Costs'&&b.trade).forEach(b=>{
     const line=(+b.qty||1)*(+b.unitCost||0);
     tradeTotals[b.trade]=(tradeTotals[b.trade]||0)+line;
   });
@@ -2836,7 +2864,7 @@ function renderDashboard(){
 
   // ── Cash Flow by Month ──
   const monthlySpend={};
-  state.budget.filter(b=>b.cat!=='Sale Cost').forEach(b=>{
+  state.budget.filter(b=>b.cat!=='Sale Costs').forEach(b=>{
     const line=(+b.qty||1)*(+b.unitCost||0);
     const d=b.invoiceDate||b.dueDate||b.date1||state.project.startDate;
     if(!d)return;
@@ -2982,7 +3010,7 @@ function exportXLSX(){
 
   const fm=n=>'$'+(Math.round(+n||0)).toLocaleString('en-AU');
   const salePrice=+p.targetSalePrice||0;
-  const saleCosts=state.budget.filter(b=>b.cat==='Sale Cost').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);
+  const saleCosts=state.budget.filter(b=>b.cat==='Sale Costs').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);
   const net=salePrice-(+p.mortgageBalance||0)-saleCosts-t.grand;
   const tasks=state.schedule||[];
   const doneTasks=tasks.filter(tk=>tk.done).length;
@@ -3020,7 +3048,7 @@ function exportXLSX(){
     [ce(''),ce(''),ce(''),ce('')],
     // Budget summary
     [cs('📊  BUDGET SUMMARY',sty.secHdr),cs('SUBTOTAL (ex GST)',sty.colHdr),cs('PAID TO DATE',sty.colHdr),cs('REMAINING',sty.colHdr)],
-    (()=>{const items=state.budget.filter(b=>b.cat==='Renovation');const sub=items.reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);const pd=items.reduce((s,b)=>s+(+b.paidAmt||0),0);return[cs('🔨  Renovation',sty.dataE),cm(sub,sty.mono),cm(pd,sty.paid),cm(Math.max(0,sub-pd),pd>=sub?sty.paid:sty.remain)]})(),
+    (()=>{const items=state.budget.filter(b=>b.cat==='Renovation Works');const sub=items.reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);const pd=items.reduce((s,b)=>s+(+b.paidAmt||0),0);return[cs('🔨  Renovation',sty.dataE),cm(sub,sty.mono),cm(pd,sty.paid),cm(Math.max(0,sub-pd),pd>=sub?sty.paid:sty.remain)]})(),
     (()=>{const sub=t.permitTotal||0;return[cs('🏛  Permits & Council',sty.dataO),cm(sub,sty.mono),cm(0,sty.mono),cm(sub,sty.remain)]})(),
     (()=>{const sub=t.pestTotal||0;return[cs('🐛  Pest Control',sty.dataE),cm(sub,sty.mono),cm(0,sty.mono),cm(sub,sty.remain)]})(),
     (()=>{return[cs('💰  Sale Costs',sty.dataO),cm(t.saleTotal,sty.mono),cm(t.salePaid,sty.paid),cm(Math.max(0,t.saleTotal-t.salePaid),t.salePaid>=t.saleTotal?sty.paid:sty.remain)]})(),
@@ -3064,10 +3092,10 @@ function exportXLSX(){
     'Orig. Est ($)','Quoted ($)','Qty','Unit','Unit $','GST','Total ($)','Paid ($)','Remaining ($)','Variance ($)',
     'Invoice Date','HIA Milestone','Mat/Lab','Tax Category','Status','Notes'];
   const CATS=[
-    {cat:'Renovation',   hdr:'🔨  RENOVATION WORKS',    s:sty.catHdr,  sc:sty.catHdrEm},
+    {cat:'Renovation Works',   hdr:'🔨  RENOVATION WORKS',    s:sty.catHdr,  sc:sty.catHdrEm},
     {cat:'Permits & Council', hdr:'🏛  PERMITS & COUNCIL', s:sty.catHdrV, sc:sty.catHdrV},
     {cat:'Pest Control', hdr:'🐛  PEST CONTROL',          s:sty.catHdrL, sc:sty.catHdrL},
-    {cat:'Sale Cost',    hdr:'💰  SALE COSTS',             s:sty.catHdrAm,sc:sty.catHdrAm},
+    {cat:'Sale Costs',   hdr:'💰  SALE COSTS',             s:sty.catHdrAm,sc:sty.catHdrAm},
   ];
   const budRows=[
     [cs(p.name+' — Work Items & Budget',sty.title),...Array(22).fill(ce(''))],
@@ -3351,7 +3379,7 @@ function exportSOW(){
 
   // Group budget items by trade (reno only, exclude Sale Cost)
   const grouped={};
-  state.budget.filter(b=>b.cat!=='Sale Cost').forEach(b=>{
+  state.budget.filter(b=>b.cat!=='Sale Costs').forEach(b=>{
     const trade=b.trade||'General';
     if(!grouped[trade])grouped[trade]=[];
     grouped[trade].push(b);
@@ -3470,7 +3498,7 @@ function exportReportCard(){
   const tasks=state.schedule||[];
   const doneTasks=tasks.filter(tk=>tk.done).length;
   const prgPct=tasks.length?Math.round(doneTasks/tasks.length*100):0;
-  const saleCosts=state.budget.filter(b=>b.cat==='Sale Cost').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);
+  const saleCosts=state.budget.filter(b=>b.cat==='Sale Costs').reduce((s,b)=>s+(+b.qty||1)*(+b.unitCost||0),0);
   const salePrice=+p.targetSalePrice||0;
   const netHand=salePrice-(+p.mortgageBalance||0)-saleCosts-t.grand;
   const e2=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -3482,7 +3510,7 @@ function exportReportCard(){
     <td>${e2(c.abn||'')}</td><td>${e2(c.insuranceExpiry||'')}</td>
     <td>${['','★','★★','★★★','★★★★','★★★★★'][+c.rating||0]||''}</td>
   </tr>`).join('');
-  const budgetRows=state.budget.filter(b=>b.cat!=='Sale Cost').sort((a,b)=>(+b.qty||1)*(+b.unitCost||0)-(+a.qty||1)*(+a.unitCost||0)).slice(0,25).map(b=>`<tr>
+  const budgetRows=state.budget.filter(b=>b.cat!=='Sale Costs').sort((a,b)=>(+b.qty||1)*(+b.unitCost||0)-(+a.qty||1)*(+a.unitCost||0)).slice(0,25).map(b=>`<tr>
     <td>${e2(b.description)}</td><td>${e2(b.room)}</td><td>${e2(b.trade)}</td>
     <td style="text-align:right;font-family:monospace">${fm((+b.qty||1)*(+b.unitCost||0))}</td>
     <td style="text-align:right;font-family:monospace">${fm(b.paidAmt||0)}</td>
