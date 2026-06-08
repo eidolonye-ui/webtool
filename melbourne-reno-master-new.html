@@ -382,6 +382,7 @@
       <button id="b-add-sale"      class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg">+ Sale cost</button>
       <button id="b-inject-council" class="bg-violet-100 hover:bg-violet-200 text-violet-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common VIC council & permit fees">🏛 Council Fees</button>
       <button id="b-inject-airtasker" class="bg-sky-100 hover:bg-sky-200 text-sky-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject Airtasker & online platform fee items">📱 Airtasker</button>
+      <button id="b-inject-survey"    class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject land surveying cost presets">🗺 Survey</button>
       <button id="b-inject-hidden" class="bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common hidden costs">+ Hidden costs</button>
       <button id="b-inject-dd"       class="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject due diligence, roof & outdoor presets">🏠 Due Diligence</button>
       <button id="b-inject-subfloor" class="bg-stone-600 hover:bg-stone-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject subfloor mould inspection & remediation presets">🕳 Subfloor</button>
@@ -815,6 +816,18 @@ const DUE_DILIGENCE_LIB=[
    estimated:1800,note:'Replace blocked or insufficient terracotta vents with modern vented silencer bricks or install electric subfloor fans with timer. Correct cross-ventilation is the primary long-term mould prevention measure. BCA requires min 1500mm²/m² of subfloor area. Combine with vapour barrier for best outcome.'},
 ];
 
+// ==================== LAND SURVEY PRESETS ====================
+const LAND_SURVEY_PRESETS=[
+  {priority:'A',description:'Feature & Level Survey (for planning/building permit)',trade:'Land Surveyor',estimated:1800,gst:true,cat:'Permits & Compliance',
+   note:'Required by most councils for planning permit applications. Shows existing features (buildings, trees, fences, levels, drainage) at accurate scale. Typically $1,200–$2,500 depending on site size and complexity. Engage early — council will not accept applications without it.'},
+  {priority:'B',description:'Title Re-establishment / Boundary Survey',trade:'Land Surveyor',estimated:2200,gst:true,cat:'Professional Fees',
+   note:'Re-establishes legal property boundaries from title. Essential before any construction near boundaries, fences, or extensions. Licensed surveyor pegs corners. Price varies by site history and complexity ($1,500–$4,000). Required by council if building within 150mm of boundary.'},
+  {priority:'B',description:'As-Built Survey (post-construction)',trade:'Land Surveyor',estimated:1400,gst:true,cat:'Professional Fees',
+   note:'Survey confirming completed works match the approved plans. Required by some councils for occupancy permit sign-off on extensions and new structures. Check with your building surveyor whether required for your project.'},
+  {priority:'C',description:'Subdivision Survey & Plan of Subdivision',trade:'Land Surveyor',estimated:8500,gst:true,cat:'Professional Fees',
+   note:'Full survey and lodgement of Plan of Subdivision with Land Use Victoria. Required for any subdivision (creating new titles). Price varies significantly by number of lots and site complexity ($5,000–$25,000+). Engage a registered surveyor — only licensed surveyors can lodge with LUV.'},
+];
+
 // ==================== AIRTASKER / ONLINE PLATFORM PRESETS ====================
 const AIRTASKER_PRESETS=[
   {priority:'B',description:'Airtasker — Service Fee (per job posted, estimate)',trade:'Airtasker',estimated:250,gst:false,cat:'Professional Fees',
@@ -942,7 +955,7 @@ function defaultData(){
       propertyType:'House',investmentStrategy:'Renovate & Hold',
       currentWeeklyRent:0,targetWeeklyRent:0,dlpStartDate:'',dlpMonths:12,area:0,
       rooms:['Kitchen','Bathroom','Laundry','Master Bedroom','Bedroom 2','Bedroom 3','Living/Dining','Exterior','Subfloor','Roof','Garage'],
-      trades:['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor'],
+      trades:['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor','Land Surveyor'],
     },
     contacts:[],budget:[],schedule:[],punch:[],
     inspections:[],compliance:[],ofi:[],risks:[],quotes:[],claims:[],diary:[],
@@ -1089,7 +1102,7 @@ function migrate(d){
   // Migrate project area and settings
   if(!d.project.area)d.project.area=0;
   // Migrate trades — add any new standard trades not yet in the project list
-  const coreTrades=['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor'];
+  const coreTrades=['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor','Land Surveyor'];
   if(!Array.isArray(d.project.trades))d.project.trades=coreTrades;
   else coreTrades.forEach(t=>{if(!d.project.trades.includes(t))d.project.trades.push(t);});
   if(!d.settings){d.settings={contingencyPct:d.project.contingencyPct||12,agentCommissionPct:2,councilPermitEst:3500,stampDutyOverridePct:0,costPerSqmTarget:1500};}
@@ -1557,6 +1570,20 @@ function wireBudget(){
     });
     saveCurrentProject();renderBudget();
     showToast('📱 Airtasker items added','bg-sky-600');
+  });
+
+  $('b-inject-survey')?.addEventListener('click',()=>{
+    if(!confirm(`Add ${LAND_SURVEY_PRESETS.length} Land Surveying items?\n\nIncludes Feature & Level Survey, Boundary Survey, As-built Survey, and Subdivision Survey. Categories: Permits & Compliance or Professional Fees depending on purpose.`))return;
+    LAND_SURVEY_PRESETS.forEach(d=>{
+      state.budget.push({
+        id:uid(),priority:d.priority,description:d.description,room:'',trade:d.trade,
+        mode:'Trade',mlType:'L',qty:1,unit:'lot',unitCost:d.estimated,originalCost:d.estimated,
+        taxLabel:'Professional Fees',hia:'',gst:d.gst,paidAmt:0,
+        cat:d.cat,notes:d.note,invoiceDate:'',payMethod:'',invoiceRef:'',
+      });
+    });
+    saveCurrentProject();renderBudget();
+    showToast('🗺 Land survey items added','bg-emerald-600');
   });
 
   $('b-inject-dd').addEventListener('click',()=>{
