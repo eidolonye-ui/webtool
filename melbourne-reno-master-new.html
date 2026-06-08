@@ -381,6 +381,7 @@
       <button id="b-add-maint"     class="bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Add a Maintenance line item">+ Maintenance</button>
       <button id="b-add-sale"      class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg">+ Sale cost</button>
       <button id="b-inject-council" class="bg-violet-100 hover:bg-violet-200 text-violet-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common VIC council & permit fees">🏛 Council Fees</button>
+      <button id="b-inject-airtasker" class="bg-sky-100 hover:bg-sky-200 text-sky-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject Airtasker & online platform fee items">📱 Airtasker</button>
       <button id="b-inject-hidden" class="bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common hidden costs">+ Hidden costs</button>
       <button id="b-inject-dd"       class="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject due diligence, roof & outdoor presets">🏠 Due Diligence</button>
       <button id="b-inject-subfloor" class="bg-stone-600 hover:bg-stone-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject subfloor mould inspection & remediation presets">🕳 Subfloor</button>
@@ -812,6 +813,18 @@ const DUE_DILIGENCE_LIB=[
    estimated:2800,note:'Professional subfloor mould treatment: clean, apply anti-fungal biocide (borax/quaternary ammonium), install vapour barrier (200μm polythene), improve cross-ventilation. Price per average 3-bed subfloor. Severe cases (structural damage) add $5k–$15k for bearer/joist replacement. WorkSafe VIC guidelines apply if mould area >1m².'},
   {name:'Subfloor Ventilation Upgrade (Vented Silencer Bricks / Fans)',cat:'Due Diligence',trade:'Subfloor Mould Inspector',room:'',priority:'B',
    estimated:1800,note:'Replace blocked or insufficient terracotta vents with modern vented silencer bricks or install electric subfloor fans with timer. Correct cross-ventilation is the primary long-term mould prevention measure. BCA requires min 1500mm²/m² of subfloor area. Combine with vapour barrier for best outcome.'},
+];
+
+// ==================== AIRTASKER / ONLINE PLATFORM PRESETS ====================
+const AIRTASKER_PRESETS=[
+  {priority:'B',description:'Airtasker — Service Fee (per job posted, estimate)',trade:'Airtasker',estimated:250,gst:false,cat:'Professional Fees',
+   note:'Airtasker charges the job poster a platform service fee (~10–20% of accepted task price, min $5). This is NOT GST-inclusive — Airtasker does not charge GST on the service fee to non-GST-registered users. Adjust amount to your actual task value. Track one line per significant job.'},
+  {priority:'C',description:'Airtasker Plus — Annual Membership',trade:'Airtasker',estimated:119,gst:false,cat:'Professional Fees',
+   note:'Airtasker Plus membership reduces service fees and provides member benefits. Annual subscription approx $119–$299 AUD (verify current pricing at airtasker.com). Deductible as a business/rental property management expense. Only worthwhile if posting 4+ jobs per year.'},
+  {priority:'B',description:'Airtasker — Task Budget (placeholder line)',trade:'Airtasker',estimated:500,gst:true,cat:'Renovation Works',
+   note:'Budget placeholder for an Airtasker task. Update description and amount to match the specific job (e.g. "Garden cleanup via Airtasker", "Furniture assembly via Airtasker"). When the task is accepted, update unit cost to the agreed amount. Common tasks: cleaning $80–$250, painting touchup $150–$600, garden cleanup $100–$400, handyman $80–$300.'},
+  {priority:'C',description:'Oneflare / Hipages — Connection Fees (if used)',trade:'',estimated:80,gst:true,cat:'Professional Fees',
+   note:'Oneflare charges homeowners a "connection fee" per accepted quote ($3–$20 per trade). Hipages is free for homeowners to post. Track total platform costs here if using multiple services. Adjust estimated amount based on number of trades engaged.'},
 ];
 
 const VBA_INSPECTIONS=[
@@ -1531,6 +1544,19 @@ function wireBudget(){
     });
     saveCurrentProject();renderBudget();
     showToast(`🏛 ${COUNCIL_PRESETS.length} council/permit lines added`,'bg-violet-600');
+  });
+
+  $('b-inject-airtasker')?.addEventListener('click',()=>{
+    if(!confirm(`Add ${AIRTASKER_PRESETS.length} Airtasker & online platform fee items?\n\nIncludes Airtasker service fee, optional annual membership, task budget placeholder, and notes on other platforms. Adjust amounts to match your actual usage.`))return;
+    AIRTASKER_PRESETS.forEach(d=>{
+      state.budget.push({
+        id:uid(),priority:d.priority,description:d.description,room:'',trade:d.trade||'',
+        mode:'Trade',mlType:'',qty:1,unit:'lot',unitCost:d.estimated,originalCost:d.estimated,
+        taxLabel:'',hia:'',gst:d.gst,paidAmt:0,cat:d.cat,notes:d.note,invoiceDate:'',payMethod:'',invoiceRef:'',
+      });
+    });
+    saveCurrentProject();renderBudget();
+    showToast('📱 Airtasker items added','bg-sky-600');
   });
 
   $('b-inject-dd').addEventListener('click',()=>{
