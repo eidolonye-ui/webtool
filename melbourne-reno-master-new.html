@@ -383,6 +383,7 @@
       <button id="b-inject-council" class="bg-violet-100 hover:bg-violet-200 text-violet-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common VIC council & permit fees">🏛 Council Fees</button>
       <button id="b-inject-airtasker" class="bg-sky-100 hover:bg-sky-200 text-sky-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject Airtasker & online platform fee items">📱 Airtasker</button>
       <button id="b-inject-survey"    class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject land surveying cost presets">🗺 Survey</button>
+      <button id="b-inject-tree"     class="bg-green-100 hover:bg-green-200 text-green-800 text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject tree services presets">🌳 Tree Services</button>
       <button id="b-inject-hidden" class="bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject common hidden costs">+ Hidden costs</button>
       <button id="b-inject-dd"       class="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject due diligence, roof & outdoor presets">🏠 Due Diligence</button>
       <button id="b-inject-subfloor" class="bg-stone-600 hover:bg-stone-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" title="Inject subfloor mould inspection & remediation presets">🕳 Subfloor</button>
@@ -828,6 +829,18 @@ const LAND_SURVEY_PRESETS=[
    note:'Full survey and lodgement of Plan of Subdivision with Land Use Victoria. Required for any subdivision (creating new titles). Price varies significantly by number of lots and site complexity ($5,000–$25,000+). Engage a registered surveyor — only licensed surveyors can lodge with LUV.'},
 ];
 
+// ==================== TREE SERVICES PRESETS ====================
+const TREE_PRESETS=[
+  {priority:'B',description:'Tree Root Grinding',trade:'Arborist',estimated:800,gst:true,cat:'Renovation Works',
+   note:'Mechanical grinding of exposed tree roots or stumps to below ground level. Essential before laying concrete paths, slabs, or levelling yard. Price $300-$1,500 by stump size and access. Check council significant tree register before booking.'},
+  {priority:'B',description:'Tree Pruning & Canopy Management',trade:'Arborist',estimated:650,gst:true,cat:'Renovation Works',
+   note:'Professional pruning to remove dead branches, manage canopy spread, or improve clearance. Certified Arborist (AQF Level 3+) recommended. Budget $400-$2,500. Council permit may be needed for pruning >30% canopy of a protected tree.'},
+  {priority:'C',description:'Tree Removal (council permit required)',trade:'Arborist',estimated:2200,gst:true,cat:'Renovation Works',
+   note:'Full tree removal including stump grinding. Obtain council permit before engaging arborist. Submit Arborist Report with permit application. Price $800-$8,000+ depending on height, species, and site access.'},
+  {priority:'C',description:'Arborist Report (for permit / pre-purchase)',trade:'Arborist',estimated:450,gst:true,cat:'Professional Fees',
+   note:'Written report from Certified Arborist on tree health, risk, and permit requirements. Required by most Melbourne councils for significant tree works. Budget $300-$800.'},
+];
+
 // ==================== AIRTASKER / ONLINE PLATFORM PRESETS ====================
 const AIRTASKER_PRESETS=[
   {priority:'B',description:'Airtasker — Service Fee (per job posted, estimate)',trade:'Airtasker',estimated:250,gst:false,cat:'Professional Fees',
@@ -955,7 +968,7 @@ function defaultData(){
       propertyType:'House',investmentStrategy:'Renovate & Hold',
       currentWeeklyRent:0,targetWeeklyRent:0,dlpStartDate:'',dlpMonths:12,area:0,
       rooms:['Kitchen','Bathroom','Laundry','Master Bedroom','Bedroom 2','Bedroom 3','Living/Dining','Exterior','Subfloor','Roof','Garage'],
-      trades:['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor','Land Surveyor'],
+      trades:['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor','Land Surveyor','Arborist'],
     },
     contacts:[],budget:[],schedule:[],punch:[],
     inspections:[],compliance:[],ofi:[],risks:[],quotes:[],claims:[],diary:[],
@@ -1102,7 +1115,7 @@ function migrate(d){
   // Migrate project area and settings
   if(!d.project.area)d.project.area=0;
   // Migrate trades — add any new standard trades not yet in the project list
-  const coreTrades=['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor','Land Surveyor'];
+  const coreTrades=['Demolition','Carpenter','Electrician','Plumber','Roof Plumber','Drainage Plumber','Tiler','Painter','Plasterer','Concreter','Landscaper','Roofer','Pest Control','Inspector','Subfloor Mould Inspector','Building Surveyor','Land Surveyor','Arborist'];
   if(!Array.isArray(d.project.trades))d.project.trades=coreTrades;
   else coreTrades.forEach(t=>{if(!d.project.trades.includes(t))d.project.trades.push(t);});
   if(!d.settings){d.settings={contingencyPct:d.project.contingencyPct||12,agentCommissionPct:2,councilPermitEst:3500,stampDutyOverridePct:0,costPerSqmTarget:1500};}
@@ -1584,6 +1597,20 @@ function wireBudget(){
     });
     saveCurrentProject();renderBudget();
     showToast('🗺 Land survey items added','bg-emerald-600');
+  });
+
+  $('b-inject-tree')?.addEventListener('click',()=>{
+    if(!confirm(`Add ${TREE_PRESETS.length} Tree Services items?\n\nIncludes Root Grinding, Tree Pruning, Tree Removal, and Arborist Report.`))return;
+    TREE_PRESETS.forEach(d=>{
+      state.budget.push({
+        id:uid(),priority:d.priority,description:d.description,room:'Exterior',trade:d.trade,
+        mode:'Trade',mlType:'L',qty:1,unit:'lot',unitCost:d.estimated,originalCost:d.estimated,
+        taxLabel:'',hia:'',gst:d.gst,paidAmt:0,
+        cat:d.cat,notes:d.note,invoiceDate:'',payMethod:'',invoiceRef:'',
+      });
+    });
+    saveCurrentProject();renderBudget();
+    showToast('🌳 Tree services items added','bg-green-600');
   });
 
   $('b-inject-dd').addEventListener('click',()=>{
