@@ -18,3 +18,7 @@ __pycache__/
 
 # 忽略 Mac 系统自动生成的文件
 .DS_Store
+
+# Generated Vite/Vitest timestamp config copies (do not commit)
+vite.config.js.timestamp-*.mjs
+vitest.config.js.timestamp-*.mjs
